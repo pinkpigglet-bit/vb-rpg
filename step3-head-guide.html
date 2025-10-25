@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Step 3 — Head Guide (Vanilla Canvas with Override)</title>
+<title>Step 3 — Head Guide (Vanilla Canvas with Override + Save)</title>
 <style>
   body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   main{max-width:900px;margin:0 auto;padding:16px}
@@ -27,8 +27,12 @@
 </head>
 <body>
 <main>
-  <h1>Step 3 — Head Guide (Vanilla Canvas with Override)</h1>
-  <p class="muted">Base guide <code>assets/guides/head.png</code> loads by default. Uploading your own image overrides it. “Remove guide” reverts to the base. Toggle “Show guide” to hide/show.</p>
+  <h1>Step 3 — Head Guide (Vanilla Canvas with Override + Save)</h1>
+  <p class="muted">
+    Base guide <code>assets/guides/head.png</code> loads by default. Uploading a file overrides it.
+    “Remove guide” reverts to the base. Toggle “Show guide” to hide/show.
+    <br>Use <b>Save Part</b> to export your drawing (no guide) as a transparent PNG and store it locally.
+  </p>
 
   <div class="row">
     <div class="panel">
@@ -41,6 +45,7 @@
         <input id="upload" type="file" accept="image/*">
         <button id="remove">Remove guide</button>
         <button id="clear">Clear</button>
+        <button id="save">Save Part</button>
       </div>
     </div>
 
@@ -49,8 +54,8 @@
       <p class="muted">Base path: <code>assets/guides/head.png</code></p>
       <ul class="muted">
         <li>Draw lines, lift finger/mouse — strokes should remain.</li>
-        <li>Upload a PNG/JPG to override the base guide.</li>
-        <li>Click “Remove guide” to revert to the base guide.</li>
+        <li>Upload a PNG/JPG to override the base guide; “Remove guide” reverts to base.</li>
+        <li><b>Save Part</b> downloads <code>head-part.png</code> (no guide) and stores it in localStorage.</li>
       </ul>
     </div>
   </div>
@@ -59,6 +64,8 @@
 <script>
 /* ------- Config ------- */
 const baseGuidePath = 'assets/guides/head.png';
+const STORE_KEY = 'vbgame.characterArt.v1'; // overall store
+const PART_ID = 'head';                      // this page is for head only
 
 /* ------- State ------- */
 const canvas = document.getElementById('c');
@@ -73,6 +80,7 @@ const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
 const clearBtn = document.getElementById('clear');
+const saveBtn = document.getElementById('save');
 
 let baseGuideImg = null;     // preloaded default (head.png)
 let customGuideImg = null;   // user-uploaded override
@@ -187,7 +195,7 @@ canvas.addEventListener('touchend', end, { passive:false });
 w.addEventListener('input', drawAll);
 o.addEventListener('input', drawAll);
 col.addEventListener('input', drawAll);
-document.getElementById('clear').addEventListener('click', ()=>{
+clearBtn.addEventListener('click', ()=>{
   strokes.length = 0; currentStroke = null; drawAll(); setStatus('cleared');
 });
 showEl.addEventListener('change', drawAll);
@@ -235,6 +243,60 @@ removeEl.addEventListener('click', ()=>{
     console.error('Failed base guide path:', baseGuidePath);
   };
 })();
+
+/* ------- Save Part (PNG without guide + localStorage) ------- */
+function exportStrokesPNG(){
+  // Render strokes (no guide) to an offscreen canvas
+  const off = document.createElement('canvas');
+  off.width = canvas.width; off.height = canvas.height;
+  const oc = off.getContext('2d');
+
+  // draw all saved strokes and current stroke (if any)
+  function drawStrokeCtx(context, st){
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.lineWidth = st.width;
+    context.strokeStyle = hexToRgba(st.color, st.alpha);
+    context.beginPath();
+    for (let i=0;i<st.points.length;i++){
+      const p = st.points[i];
+      if (i===0) context.moveTo(p.x,p.y); else context.lineTo(p.x,p.y);
+    }
+    context.stroke();
+  }
+  for (const s of strokes) drawStrokeCtx(oc, s);
+  if (currentStroke) drawStrokeCtx(oc, currentStroke);
+
+  return off.toDataURL('image/png'); // transparent background
+}
+
+function saveToLocalStorage(dataUrl){
+  try{
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    store[PART_ID] = dataUrl;
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    return true;
+  } catch(e){
+    console.warn('localStorage save failed', e);
+    return false;
+  }
+}
+
+function download(filename, dataUrl){
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+saveBtn.addEventListener('click', ()=>{
+  const dataUrl = exportStrokesPNG();
+  const ok = saveToLocalStorage(dataUrl);
+  download('head-part.png', dataUrl);
+  setStatus((ok ? 'saved to localStorage and ' : '') + 'download started ✓','ok');
+});
 
 setStatus('ready');
 </script>
