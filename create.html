@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create Your Athlete</title>
+  <style>
+    :root{
+      --bg:#0e0f12;--card:#151821;--muted:#9aa3b2;--text:#e9eef7;--accent:#5eead4;--accent2:#60a5fa;--ring:rgba(94,234,212,.5);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:radial-gradient(1200px 600px at 50% -10%, #121521, var(--bg));color:var(--text)}
+    header{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(to bottom, rgba(21,24,33,.9), rgba(21,24,33,.6));backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);z-index:10}
+    .brand{display:flex;gap:10px;align-items:center;font-weight:700}
+    .logo{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0b1020}
+    main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+    .card{background:linear-gradient(145deg, rgba(21,24,33,.9), rgba(21,24,33,.65));border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .row{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+    @media(max-width:900px){.row{grid-template-columns:1fr;}}
+    .pad{padding:16px}
+    .tools{display:flex;flex-wrap:wrap;gap:8px}
+    button,select,input[type="range"]{appearance:none;background:#1a1f2b;border:1px solid rgba(255,255,255,.08);color:var(--text);padding:8px 10px;border-radius:10px}
+    button:hover{background:#1f2533}
+    .hint{color:var(--muted);font-size:.95rem}
+    .steps{display:flex;gap:8px;flex-wrap:wrap}
+    .step{padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:#111522;color:var(--muted)}
+    .step.active{color:var(--text);outline:2px solid var(--ring)}
+    .ghost-toggle{display:flex;align-items:center;gap:8px}
+    .footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px}
+    canvas{background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto}
+    .preview{min-height:260px;display:grid;place-items:center}
+    .warn{color:#fca5a5}
+  </style>
+  <!-- Fabric.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><div class="logo">VB</div><div>Create Your Athlete</div></div>
+    <a href="./index.html" style="color:var(--text);text-decoration:none">◀ Home</a>
+  </header>
+  <main>
+    <section class="card pad">
+      <div class="steps" id="steps"></div>
+      <h2 id="title" style="margin:10px 0 6px">Design: Head</h2>
+      <p class="hint">Draw directly on the canvas. Use the faint guide for sizing. When you're happy, click <b>Save Part</b>, then <b>Next</b>.</p>
+      <div class="row">
+        <div class="pad" style="padding:0">
+          <canvas id="draw" width="720" height="720" aria-label="Drawing canvas"></canvas>
+          <div class="pad" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+            <div class="tools">
+              <label>Brush: <input type="range" id="brush" min="1" max="40" value="8"/></label>
+              <label>Opacity: <input type="range" id="opacity" min="10" max="100" value="100"/></label>
+              <label>Color: <input type="color" id="color" value="#60a5fa"/></label>
+              <button id="undo">Undo</button>
+              <button id="clear">Clear</button>
+            </div>
+            <div class="ghost-toggle"><input type="checkbox" id="ghostToggle" checked/> <label for="ghostToggle">Show guide</label></div>
+          </div>
+        </div>
+        <div class="pad" style="display:grid;gap:12px">
+          <div class="card pad preview">
+            <canvas id="preview" width="280" height="280" aria-label="Preview"></canvas>
+          </div>
+          <div class="hint">This preview shows the exported PNG for this part with transparency. Keep strokes within the guide for best rigging later.</div>
+          <div class="footer">
+            <div>
+              <button id="savePart">Save Part</button>
+              <span id="saveStatus" class="hint"></span>
+            </div>
+            <div>
+              <button id="back">◀ Back</button>
+              <button id="next">Next ▶</button>
+            </div>
+          </div>
+          <div id="warn" class="hint warn"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card pad">
+      <h3>Tips</h3>
+      <ul>
+        <li>Use simple, bold shapes—this is a cut-out puppet for animation.</li>
+        <li>Stay inside the ghost outline so parts align later.</li>
+        <li>You can come back and redraw any part at any time.</li>
+      </ul>
+    </section>
+  </main>
+
+<script>
+// --- Simple guided drawing flow with Fabric.js ---
+const PARTS = [
+  {id:'head', title:'Head', guide: drawHeadGuide},
+  {id:'torso', title:'Torso', guide: drawTorsoGuide},
+  {id:'armL', title:'Left Arm', guide: drawArmGuide},
+  {id:'armR', title:'Right Arm', guide: drawArmGuide},
+  {id:'legL', title:'Left Leg', guide: drawLegGuide},
+  {id:'legR', title:'Right Leg', guide: drawLegGuide},
+  // You can split arms/legs later into upper/lower if you prefer
+];
+
+const KEY_STORE = 'vbgame.characterArt.v1';
+const S = JSON.parse(localStorage.getItem(KEY_STORE) || '{}');
+let idx = Math.max(0, PARTS.findIndex(p => !S[p.id]));
+if (idx === -1) idx = 0; // safety
+
+// --- UI elements
+const stepsEl = document.getElementById('steps');
+const titleEl = document.getElementById('title');
+const saveStatus = document.getElementById('saveStatus');
+const warnEl = document.getElementById('warn');
+
+// Steps chips
+function renderSteps(){
+  stepsEl.innerHTML = '';
+  PARTS.forEach((p, i)=>{
+    const chip = document.createElement('div');
+    chip.className = 'step' + (i===idx ? ' active' : '') + (S[p.id] ? '' : '');
+    chip.textContent = (i+1)+'. '+p.title + (S[p.id] ? ' ✓' : '');
+    chip.style.cursor = 'pointer';
+    chip.addEventListener('click', ()=>{ idx=i; loadPart(); });
+    stepsEl.appendChild(chip);
+  });
+}
+
+// Fabric setup
+const canvas = new fabric.Canvas('draw', { isDrawingMode: true, backgroundColor: 'transparent' });
+const preview = new fabric.StaticCanvas('preview');
+let ghostLayer; // guide
+let history = [];
+
+function pushHistory(){
+  history.push(JSON.stringify(canvas));
+  if (history.length > 50) history.shift();
+}
+
+canvas.on('path:created', pushHistory);
+
+// Controls
+const brush = document.getElementById('brush');
+const opacity = document.getElementById('opacity');
+const color = document.getElementById('color');
+brush.addEventListener('input', ()=>{canvas.freeDrawingBrush.width = +brush.value;});
+opacity.addEventListener('input', ()=>{canvas.freeDrawingBrush.opacity = (+opacity.value)/100;});
+color.addEventListener('input', ()=>{canvas.freeDrawingBrush.color = color.value;});
+
+document.getElementById('undo').addEventListener('click', ()=>{
+  const objs = canvas.getObjects();
+  if (!objs.length) return;
+  const last = objs.pop();
+  canvas.remove(last); canvas.requestRenderAll();
+});
+
+document.getElementById('clear').addEventListener('click', ()=>{
+  canvas.getObjects().forEach(o=> canvas.remove(o));
+  canvas.requestRenderAll();
+});
+
+document.getElementById('ghostToggle').addEventListener('change', (e)=>{
+  if (ghostLayer) ghostLayer.visible = e.target.checked;
+  canvas.requestRenderAll();
+});
+
+// Guides
+function drawHeadGuide(c){
+  const g = new fabric.Circle({ left: 210, top: 160, radius: 150, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  c.add(g); return g;
+}
+function drawTorsoGuide(c){
+  const r = new fabric.Rect({ left: 200, top: 140, width: 320, height: 420, rx: 40, ry: 40, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  c.add(r); return r;
+}
+function drawArmGuide(c){
+  const r = new fabric.Rect({ left: 240, top: 190, width: 240, height: 300, rx: 60, ry: 60, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  c.add(r); return r;
+}
+function drawLegGuide(c){
+  const r = new fabric.Rect({ left: 280, top: 160, width: 160, height: 420, rx: 50, ry: 50, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  c.add(r); return r;
+}
+
+// Load current part
+function loadPart(){
+  renderSteps();
+  saveStatus.textContent = '';
+  warnEl.textContent = '';
+  titleEl.textContent = 'Design: ' + PARTS[idx].title;
+  // Reset canvas
+  canvas.clear();
+  canvas.setBackgroundColor('transparent', canvas.renderAll.bind(canvas));
+  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  canvas.freeDrawingBrush.width = +brush.value;
+  canvas.freeDrawingBrush.color = color.value;
+  canvas.freeDrawingBrush.opacity = (+opacity.value)/100;
+  // Guide
+  ghostLayer = PARTS[idx].guide(canvas);
+  // Load previous drawing if exists
+  const dataUrl = S[PARTS[idx].id];
+  if (dataUrl){
+    fabric.Image.fromURL(dataUrl, img=>{
+      img.set({ left: 0, top: 0, selectable:false, evented:false });
+      canvas.add(img); // place below new strokes
+      img.sendToBack();
+      if (ghostLayer) ghostLayer.bringToFront();
+      canvas.requestRenderAll();
+    }, {crossOrigin:'anonymous'});
+  }
+  // Update preview
+  updatePreview();
+}
+
+function updatePreview(){
+  const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
+  preview.clear();
+  fabric.Image.fromURL(url, img=>{
+    img.set({ left: 20, top: 20, scaleX: 240/720, scaleY: 240/720, selectable:false, evented:false });
+    preview.add(img);
+  });
+}
+
+canvas.on('after:render', ()=>{
+  // update preview throttle
+  if (updatePreview._t) cancelAnimationFrame(updatePreview._t);
+  updatePreview._t = requestAnimationFrame(updatePreview);
+});
+
+// Save current part
+function saveCurrent(){
+  // export PNG with transparency
+  const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
+  const id = PARTS[idx].id;
+  S[id] = url;
+  localStorage.setItem(KEY_STORE, JSON.stringify(S));
+  saveStatus.textContent = `Saved ${PARTS[idx].title} ✓`;
+  renderSteps();
+}
+
+document.getElementById('savePart').addEventListener('click', saveCurrent);
+
+document.getElementById('next').addEventListener('click', ()=>{
+  // require save before moving on
+  if (!S[PARTS[idx].id]){ warnEl.textContent = 'Please Save Part before continuing.'; return; }
+  if (idx < PARTS.length-1){ idx++; loadPart(); }
+  else {
+    // Finished all parts → go to rig step (future page)
+    window.location.href = 'rig.html';
+  }
+});
+
+document.getElementById('back').addEventListener('click', ()=>{
+  if (idx>0){ idx--; loadPart(); }
+  else {
+    window.location.href = 'index.html';
+  }
+});
+
+// Boot
+renderSteps();
+loadPart();
+</script>
+</body>
+</html>
