@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Step 2B — Vanilla Canvas Touch Test</title>
+<style>
+  body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  h1{margin:8px 0 12px;font-size:18px}
+  canvas{
+    display:block;width:100%;max-width:720px;height:auto;
+    background:#0f1219;border:1px solid rgba(255,255,255,.12);border-radius:12px;
+    touch-action:none;          /* critical for finger drawing */
+    -ms-touch-action:none;
+  }
+  .row{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  @media(max-width:900px){.row{grid-template-columns:1fr}}
+  .panel{background:#151821;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px}
+  .muted{color:#9aa3b2}
+  button,input[type="range"],input[type="color"]{
+    appearance:none;background:#1a1f2b;color:#e9eef7;border:1px solid rgba(255,255,255,.12);
+    padding:8px 10px;border-radius:10px;margin-right:8px
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Step 2B — Vanilla Canvas Touch Test</h1>
+  <p class="muted">Goal: draw with your finger; lines must persist after you lift your finger.</p>
+
+  <div class="row">
+    <div class="panel">
+      <canvas id="c" width="720" height="720"></canvas>
+      <div style="margin-top:10px">
+        <label>Brush <input id="w" type="range" min="1" max="40" value="8"></label>
+        <label>Opacity <input id="o" type="range" min="10" max="100" value="100"></label>
+        <label>Color <input id="col" type="color" value="#60a5fa"></label>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <p id="status" class="muted">Status: ready</p>
+      <ul class="muted">
+        <li>Draw squiggles, lift finger → lines should stay.</li>
+        <li>Tap Clear to erase.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const statusEl = document.getElementById('status');
+const w = document.getElementById('w');
+const o = document.getElementById('o');
+const col = document.getElementById('col');
+const clearBtn = document.getElementById('clear');
+
+function setStatus(t){ statusEl.textContent = 'Status: ' + t; }
+
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+function applyBrush(){
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = +w.value;
+  ctx.strokeStyle = hexToRgba(col.value, (+o.value)/100);
+}
+
+function hexToRgba(hex, alpha){
+  const v = hex.replace('#','');
+  const r = parseInt(v.substring(0,2),16);
+  const g = parseInt(v.substring(2,4),16);
+  const b = parseInt(v.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function getPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const t = ('touches' in e) ? e.touches[0] : ('changedTouches' in e ? e.changedTouches[0] : e);
+  return {
+    x: (t.clientX - rect.left) * (canvas.width / rect.width),
+    y: (t.clientY - rect.top)  * (canvas.height / rect.height)
+  };
+}
+
+function start(e){
+  e.preventDefault();
+  drawing = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  setStatus('drawing…');
+}
+function move(e){
+  if(!drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  lastX = p.x; lastY = p.y;
+}
+function end(e){
+  if(!drawing) return;
+  e.preventDefault();
+  drawing = false;
+  setStatus('finger lifted; stroke persists ✓');
+}
+
+canvas.addEventListener('pointerdown', start, { passive:false });
+canvas.addEventListener('pointermove', move, { passive:false });
+canvas.addEventListener('pointerup', end, { passive:false });
+canvas.addEventListener('pointercancel', end, { passive:false });
+
+// iOS older fallback
+canvas.addEventListener('touchstart', start, { passive:false });
+canvas.addEventListener('touchmove', move, { passive:false });
+canvas.addEventListener('touchend', end, { passive:false });
+
+w.addEventListener('input', applyBrush);
+o.addEventListener('input', applyBrush);
+col.addEventListener('input', applyBrush);
+clearBtn.addEventListener('click', ()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); setStatus('cleared'); });
+
+applyBrush();
+setStatus('ready — try drawing');
+</script>
+</body>
+</html>
