@@ -42,12 +42,11 @@
     .footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px}
     canvas{
       background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto;
-      touch-action:none;-ms-touch-action:none; /* keep finger strokes from scrolling the page */
+      touch-action:none;-ms-touch-action:none;
     }
     .preview{min-height:260px;display:grid;place-items:center}
     .warn{color:#fca5a5}
   </style>
-  <!-- Fabric.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 </head>
 <body>
@@ -60,7 +59,7 @@
     <section class="card pad">
       <div class="steps" id="steps"></div>
       <h2 id="title" style="margin:10px 0 6px">Design: Head</h2>
-      <p class="hint">Use the template guide or upload your own. Draw over it, then <b>Save Part</b> and go <b>Next</b>.</p>
+      <p class="hint">Template shows behind your drawing. Toggle “Show guide” to hide/show. Draw, then <b>Save Part</b> and <b>Next</b>.</p>
 
       <div class="row">
         <div class="pad" style="padding:0">
@@ -75,11 +74,11 @@
               <button id="clear">Clear</button>
             </div>
             <div class="ghost-toggle">
-              <input type="checkbox" id="ghostToggle" checked> <label for="ghostToggle">Show guide</label>
+              <input type="checkbox" id="ghostToggle" checked>
+              <label for="ghostToggle">Show guide</label>
             </div>
             <div class="tools">
               <input id="guideUpload" type="file" accept="image/*">
-              <button id="useRepoGuide">Use template</button>
               <button id="removeGuide">Hide template</button>
             </div>
           </div>
@@ -89,7 +88,8 @@
           <div class="card pad preview">
             <canvas id="preview" width="280" height="280" aria-label="Preview"></canvas>
           </div>
-          <div class="hint">This preview shows the exported PNG for this part with transparency.</div>
+          <div id="warn" class="hint warn"></div>
+          <div class="hint">Saved parts are stored locally on your phone under <code>vbgame.characterArt.v1</code>.</div>
 
           <div class="footer">
             <div>
@@ -101,7 +101,6 @@
               <button id="next">Next ▶</button>
             </div>
           </div>
-          <div id="warn" class="hint warn"></div>
         </div>
       </div>
     </section>
@@ -111,13 +110,13 @@
       <ul>
         <li>Keep strokes inside the template for easy rigging later.</li>
         <li>Use simple shapes; this will be a cut-out puppet.</li>
-        <li>You can jump between steps using the chips at the top.</li>
+        <li>Tap the chips at the top to jump between parts.</li>
       </ul>
     </section>
   </main>
 
 <script>
-/* ---------- PART DEFINITIONS (matches your filenames) ---------- */
+/* -------- PARTS: matches your filenames exactly -------- */
 const PARTS = [
   { id:'head',     title:'Head',     guidePath:'assets/guides/head.png' },
   { id:'torso',    title:'Torso',    guidePath:'assets/guides/torso.png' },
@@ -128,15 +127,13 @@ const PARTS = [
   { id:'rightleg', title:'Right Leg',guidePath:'assets/guides/rightleg.png' }
 ];
 
-// Where we store the user-drawn PNGs
 const KEY_STORE = 'vbgame.characterArt.v1';
 const S = JSON.parse(localStorage.getItem(KEY_STORE) || '{}');
 
-// Figure out where to start (first unsaved part)
 let idx = PARTS.findIndex(p => !S[p.id]);
 if (idx === -1) idx = 0;
 
-/* ---------- UI references ---------- */
+/* -------- UI refs -------- */
 const stepsEl = document.getElementById('steps');
 const titleEl = document.getElementById('title');
 const saveStatus = document.getElementById('saveStatus');
@@ -147,12 +144,19 @@ const colorEl = document.getElementById('color');
 const guideUpload = document.getElementById('guideUpload');
 const ghostToggle = document.getElementById('ghostToggle');
 
-/* ---------- Fabric canvases ---------- */
+/* -------- Fabric setup -------- */
 const canvas = new fabric.Canvas('draw', { isDrawingMode: true, backgroundColor: 'transparent' });
 const preview = new fabric.StaticCanvas('preview');
-let ghostLayer = null; // current guide image
+let ghostLayer = null;
 
-/* ---------- Steps chips ---------- */
+/* -------- Helpers -------- */
+function cacheBust(url){ const v = Date.now().toString().slice(-6); return url + (url.includes('?') ? '&' : '?') + 'v=' + v; }
+
+function report(msg){
+  warnEl.textContent = msg || '';
+}
+
+/* -------- Steps chips -------- */
 function renderSteps(){
   stepsEl.innerHTML = '';
   PARTS.forEach((p, i)=>{
@@ -165,17 +169,15 @@ function renderSteps(){
   });
 }
 
-/* ---------- Controls ---------- */
+/* -------- Controls -------- */
 brushEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.width = +brushEl.value; });
-opacityEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.opacity = (+opacityEl.value) / 100; });
+opacityEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.opacity = (+opacityEl.value)/100; });
 colorEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.color = colorEl.value; });
 
 document.getElementById('undo').addEventListener('click', ()=>{
   const objs = canvas.getObjects().filter(o => o !== ghostLayer);
   if (!objs.length) return;
-  const last = objs[objs.length - 1];
-  canvas.remove(last); canvas.requestRenderAll();
-  updatePreview();
+  canvas.remove(objs[objs.length-1]); canvas.requestRenderAll(); updatePreview();
 });
 
 document.getElementById('clear').addEventListener('click', ()=>{
@@ -187,16 +189,20 @@ document.getElementById('removeGuide').addEventListener('click', ()=>{
   if (ghostLayer){ canvas.remove(ghostLayer); ghostLayer = null; canvas.requestRenderAll(); }
 });
 
-document.getElementById('useRepoGuide').addEventListener('click', ()=>{
-  const url = PARTS[idx].guidePath;
-  if (url) loadGuideImage(url);
-});
-
 ghostToggle.addEventListener('change', (e)=>{
-  if (ghostLayer) { ghostLayer.visible = e.target.checked; canvas.requestRenderAll(); }
+  if (e.target.checked){
+    if (!ghostLayer){ // (re)load default guide for this step
+      const url = PARTS[idx].guidePath;
+      if (url) loadGuideImage(url);
+    } else {
+      ghostLayer.visible = true; canvas.requestRenderAll();
+    }
+  } else {
+    if (ghostLayer){ ghostLayer.visible = false; canvas.requestRenderAll(); }
+  }
 });
 
-/* Upload a custom guide image (from phone photos) */
+/* Upload a custom guide image */
 guideUpload.addEventListener('change', (e)=>{
   const file = e.target.files?.[0];
   if (!file) return;
@@ -205,33 +211,41 @@ guideUpload.addEventListener('change', (e)=>{
   reader.readAsDataURL(file);
 });
 
-/* ---------- Guide loader ---------- */
+/* -------- Guide loader (with errors shown) -------- */
 function loadGuideImage(src){
+  if (!src) return;
   if (ghostLayer){ canvas.remove(ghostLayer); ghostLayer = null; }
-  fabric.Image.fromURL(src, (img)=>{
-    const max = 640; // leave margins inside 720x720
-    const scale = Math.min(max / img.width, max / img.height, 1);
-    img.set({
-      left:(720 - img.width*scale)/2,
-      top: (720 - img.height*scale)/2,
-      scaleX:scale, scaleY:scale,
-      opacity:0.45, selectable:false, evented:false, hoverCursor:'default'
-    });
-    ghostLayer = img;
-    canvas.add(img);
-    img.sendToBack();
-    canvas.requestRenderAll();
-  }, { crossOrigin:'anonymous' });
+  const url = src.startsWith('data:') ? src : cacheBust(src);
+
+  fabric.util.loadImage(url,
+    (imgElem)=>{
+      if (!imgElem){ report('Guide failed to decode.'); return; }
+      const img = new fabric.Image(imgElem, { selectable:false, evented:false, opacity:0.45 });
+      const max = 640;
+      const scale = Math.min(max / img.width, max / img.height, 1);
+      img.set({
+        left:(720 - img.width*scale)/2,
+        top:(720 - img.height*scale)/2,
+        scaleX:scale, scaleY:scale,
+      });
+      ghostLayer = img;
+      canvas.add(img);
+      img.sendToBack();
+      canvas.requestRenderAll();
+      report('');
+    },
+    { crossOrigin:'anonymous' }
+  );
 }
 
-/* ---------- Load a part ---------- */
+/* -------- Load a part -------- */
 function loadPart(){
   renderSteps();
   saveStatus.textContent = '';
-  warnEl.textContent = '';
+  report('');
   titleEl.textContent = 'Design: ' + PARTS[idx].title;
 
-  // Reset canvas & brush
+  // Reset canvas and brush
   canvas.clear();
   canvas.setBackgroundColor('transparent', canvas.renderAll.bind(canvas));
   canvas.isDrawingMode = true;
@@ -240,18 +254,18 @@ function loadPart(){
   canvas.freeDrawingBrush.color = colorEl.value;
   canvas.freeDrawingBrush.opacity = (+opacityEl.value)/100;
 
-  // Default: load the repo template for this part
-  if (ghostToggle.checked && PARTS[idx].guidePath) {
+  // Auto-load default guide if toggle is on
+  if (ghostToggle.checked && PARTS[idx].guidePath){
     loadGuideImage(PARTS[idx].guidePath);
   }
 
-  // If the user has a saved drawing for this part, show it under the current strokes
+  // If saved drawing exists, layer it (under the guide)
   const savedUrl = S[PARTS[idx].id];
   if (savedUrl){
     fabric.Image.fromURL(savedUrl, img=>{
       img.set({ left:0, top:0, selectable:false, evented:false });
       canvas.add(img);
-      if (ghostLayer) ghostLayer.bringToFront(); // template stays above old drawing
+      if (ghostLayer) ghostLayer.bringToFront();
       canvas.requestRenderAll();
     }, {crossOrigin:'anonymous'});
   }
@@ -259,11 +273,9 @@ function loadPart(){
   updatePreview();
 }
 
-/* ---------- Preview exporter ---------- */
+/* -------- Preview exporter -------- */
 function updatePreview(){
-  const url = canvas.toDataURL({
-    format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true
-  });
+  const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
   preview.clear();
   fabric.Image.fromURL(url, img=>{
     img.set({ left:20, top:20, scaleX:240/720, scaleY:240/720, selectable:false, evented:false });
@@ -275,9 +287,8 @@ canvas.on('after:render', ()=>{
   updatePreview._t = requestAnimationFrame(updatePreview);
 });
 
-/* ---------- Save ---------- */
+/* -------- Save -------- */
 function saveCurrent(){
-  // Export PNG with transparency, excluding transform
   const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
   const id = PARTS[idx].id;
   S[id] = url;
@@ -287,19 +298,17 @@ function saveCurrent(){
 }
 document.getElementById('savePart').addEventListener('click', saveCurrent);
 
-/* ---------- Navigation ---------- */
+/* -------- Navigation -------- */
 document.getElementById('next').addEventListener('click', ()=>{
-  if (!S[PARTS[idx].id]){ warnEl.textContent = 'Please Save Part before continuing.'; return; }
+  if (!S[PARTS[idx].id]){ report('Please Save Part before continuing.'); return; }
   if (idx < PARTS.length-1){ idx++; loadPart(); }
-  else { window.location.href = 'index.html'; } // all done for now (could go to rig.html later)
-});
-
-document.getElementById('back').addEventListener('click', ()=>{
-  if (idx>0){ idx--; loadPart(); }
   else { window.location.href = 'index.html'; }
 });
+document.getElementById('back').addEventListener('click', ()=>{
+  if (idx>0){ idx--; loadPart(); } else { window.location.href = 'index.html'; }
+});
 
-/* ---------- Boot ---------- */
+/* -------- Boot -------- */
 renderSteps();
 loadPart();
 </script>
