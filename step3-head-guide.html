@@ -38,6 +38,8 @@
         <label>Opacity <input id="o" type="range" min="10" max="100" value="100"></label>
         <label>Color <input id="col" type="color" value="#60a5fa"></label>
         <label><input id="show" type="checkbox" checked> Show guide</label>
+        <input id="upload" type="file" accept="image/*">
+        <button id="remove">Remove guide</button>
         <button id="clear">Clear</button>
       </div>
     </div>
@@ -66,6 +68,28 @@ const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
 const clearBtn = document.getElementById('clear');
+const uploadEl = document.getElementById('upload');
+const removeEl = document.getElementById('remove');
+
+uploadEl.addEventListener('change', (e)=>{
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => { guideImg = img; drawAll(); setStatus('custom guide loaded ✓','ok'); };
+    img.onerror = () => { setStatus('failed to decode uploaded image','warn'); };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+removeEl.addEventListener('click', ()=>{
+  guideImg = null;
+  drawAll();
+  setStatus('guide removed');
+});
+
 
 let guideImg = null;
 let drawing = false;
