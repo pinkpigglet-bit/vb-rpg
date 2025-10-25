@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Step 5 — Rig Editor</title>
+<title>Step 5 — Rig Editor v2 (Upper/Lower Limbs)</title>
 <style>
   body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   main{max-width:1100px;margin:0 auto;padding:16px}
@@ -26,15 +26,15 @@
   .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .stack{display:grid;gap:10px}
   .row2{display:flex;flex-wrap:wrap;gap:10px}
-  code{background:#0b0f16;padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.06)}
-  .chip{padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:#0f141f;cursor:pointer}
+  .chip{padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:#0f141f}
   .chip.active{outline:2px solid rgba(94,234,212,.5)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 </style>
 </head>
 <body>
 <main>
-  <h1>Step 5 — Rig Editor</h1>
-  <p class="muted">Place pivots, move parts, test rotations, and save a rig. Uses saved PNGs from <code>vbgame.characterArt.v1</code>.</p>
+  <h1>Step 5 — Rig Editor v2 (Upper/Lower Limbs)</h1>
+  <p class="muted">Two joints per limb (upper/lower). We reuse your existing arm/leg PNGs by cropping; adjust split % per limb.</p>
 
   <div class="row">
     <div class="panel">
@@ -44,11 +44,15 @@
           <select id="part">
             <option value="torso">Torso</option>
             <option value="head">Head</option>
-            <option value="leftarm">Left Arm</option>
-            <option value="rightarm">Right Arm</option>
+            <option value="leftUpperArm">Left Upper Arm</option>
+            <option value="leftLowerArm">Left Lower Arm</option>
+            <option value="rightUpperArm">Right Upper Arm</option>
+            <option value="rightLowerArm">Right Lower Arm</option>
             <option value="shorts">Shorts</option>
-            <option value="leftleg">Left Leg</option>
-            <option value="rightleg">Right Leg</option>
+            <option value="leftUpperLeg">Left Upper Leg</option>
+            <option value="leftLowerLeg">Left Lower Leg</option>
+            <option value="rightUpperLeg">Right Upper Leg</option>
+            <option value="rightLowerLeg">Right Lower Leg</option>
           </select>
         </label>
         <label><input id="editPivot" type="checkbox"> Edit pivot</label>
@@ -66,26 +70,26 @@
 
     <div class="panel">
       <div class="stack">
-        <div><b>Hierarchy</b> (fixed for now)</div>
+        <div><b>Hierarchy</b></div>
         <div class="row2">
           <span class="chip">torso</span> →
           <span class="chip">head</span>,
-          <span class="chip">leftarm</span>,
-          <span class="chip">rightarm</span>,
+          <span class="chip">leftUpperArm</span> → <span class="chip">leftLowerArm</span>,
+          <span class="chip">rightUpperArm</span> → <span class="chip">rightLowerArm</span>,
           <span class="chip">shorts</span> →
-          <span class="chip">leftleg</span>,
-          <span class="chip">rightleg</span>
+          <span class="chip">leftUpperLeg</span> → <span class="chip">leftLowerLeg</span>,
+          <span class="chip">rightUpperLeg</span> → <span class="chip">rightLowerLeg</span>
         </div>
-        <div class="muted">We’ll make this editable later. For now, use these connections.</div>
 
-        <div><b>Tips</b></div>
-        <ul class="muted">
-          <li>Drag to move the selected part (relative to its parent).</li>
-          <li>Enable <b>Edit pivot</b>, then drag the little crosshair to set rotation pivot.</li>
-          <li>Use <b>Rotate</b> to test rotation around the pivot.</li>
-          <li><b>Save Rig</b> stores all part transforms/pivots in <code>vbgame.rig.v1</code>.</li>
-        </ul>
+        <div><b>Limb Split (crop) %</b></div>
+        <div class="grid">
+          <label>Left Arm split <input id="splitLeftArm" type="range" min="30" max="70" value="50"></label>
+          <label>Right Arm split <input id="splitRightArm" type="range" min="30" max="70" value="50"></label>
+          <label>Left Leg split <input id="splitLeftLeg" type="range" min="30" max="70" value="50"></label>
+          <label>Right Leg split <input id="splitRightLeg" type="range" min="30" max="70" value="50"></label>
+        </div>
 
+        <div class="muted">Upper draws top portion; lower draws bottom portion of the same PNG. Adjust split if elbows/knees sit higher/lower.</div>
         <div id="warnings" class="warn"></div>
       </div>
     </div>
@@ -93,282 +97,198 @@
 </main>
 
 <script>
-/* ---------- Config ---------- */
-const STORE_ART = 'vbgame.characterArt.v1';  // PNG dataURLs per part
-const STORE_RIG = 'vbgame.rig.v1';          // rig JSON
-const PARTS = ['torso','head','leftarm','rightarm','shorts','leftleg','rightleg'];
-// Fixed parenting for Step 5
-const PARENT = {
-  torso: null,
-  head: 'torso',
-  leftarm: 'torso',
-  rightarm: 'torso',
-  shorts: 'torso',
-  leftleg: 'shorts',
-  rightleg: 'shorts'
-};
+const STORE_ART='vbgame.characterArt.v1';
+const STORE_RIG='vbgame.rig.v2';
 
-/* ---------- DOM ---------- */
-const canvas = document.getElementById('rig');
-const ctx = canvas.getContext('2d');
-const partEl = document.getElementById('part');
-const editPivotEl = document.getElementById('editPivot');
-const rotEl = document.getElementById('rot');
-const scaleEl = document.getElementById('scale');
-const resetPoseBtn = document.getElementById('resetPose');
-const saveRigBtn = document.getElementById('saveRig');
-const loadRigBtn = document.getElementById('loadRig');
-const resetRigBtn = document.getElementById('resetRig');
-const statusEl = document.getElementById('status');
-const warningsEl = document.getElementById('warnings');
+const PARTS=['torso','head','leftUpperArm','leftLowerArm','rightUpperArm','rightLowerArm','shorts','leftUpperLeg','leftLowerLeg','rightUpperLeg','rightLowerLeg'];
+const PARENT={ torso:null, head:'torso',
+  leftUpperArm:'torso', leftLowerArm:'leftUpperArm',
+  rightUpperArm:'torso', rightLowerArm:'rightUpperArm',
+  shorts:'torso', leftUpperLeg:'shorts', leftLowerLeg:'leftUpperLeg',
+  rightUpperLeg:'shorts', rightLowerLeg:'rightUpperLeg' };
 
-/* ---------- State ---------- */
-let selected = partEl.value;
-const images = {}; // part -> HTMLImageElement
-const rig = {};    // part -> { pos:{x,y}, rot, scale, pivot:{x,y} }
-let dragging = false;
-let dragMode = 'part'; // 'part' or 'pivot'
-let last = {x:0,y:0};
+const canvas=document.getElementById('rig');
+const ctx=canvas.getContext('2d');
+const partEl=document.getElementById('part');
+const editPivotEl=document.getElementById('editPivot');
+const rotEl=document.getElementById('rot');
+const scaleEl=document.getElementById('scale');
+const resetPoseBtn=document.getElementById('resetPose');
+const saveRigBtn=document.getElementById('saveRig');
+const loadRigBtn=document.getElementById('loadRig');
+const resetRigBtn=document.getElementById('resetRig');
+const statusEl=document.getElementById('status');
+const warningsEl=document.getElementById('warnings');
 
-/* ---------- Helpers ---------- */
-function setStatus(t, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + t; }
-function warn(msg){ warningsEl.textContent = msg || ''; }
-function center(){ return { x: canvas.width/2, y: canvas.height/2 }; }
-function toRad(deg){ return deg * Math.PI / 180; }
-function getMouse(e){
-  const r = canvas.getBoundingClientRect();
-  const t = ('touches' in e) ? e.touches[0] : ('changedTouches' in e ? e.changedTouches[0] : e);
-  return { x: (t.clientX - r.left) * (canvas.width/r.width), y: (t.clientY - r.top) * (canvas.height/r.height) };
-}
+const splitLeftArmEl=document.getElementById('splitLeftArm');
+const splitRightArmEl=document.getElementById('splitRightArm');
+const splitLeftLegEl=document.getElementById('splitLeftLeg');
+const splitRightLegEl=document.getElementById('splitRightLeg');
 
-/* ---------- Default rig layout (relative to parent) ---------- */
+let selected=partEl.value;
+let images={}; // logical: partKey->img (we’ll map from your saved art keys)
+let srcImages={}; // original: head/torso/leftarm/rightarm/leftleg/rightleg/shorts
+let rig={}, dragging=false, dragMode='part', last={x:0,y:0};
+
+// limb split ratios (% of height that belongs to upper segment)
+const split={ leftArm:0.5, rightArm:0.5, leftLeg:0.5, rightLeg:0.5 };
+
+function setStatus(t,cls='muted'){statusEl.className=cls;statusEl.textContent='Status: '+t;}
+function warn(msg){warningsEl.textContent=msg||'';}
+function toRad(d){return d*Math.PI/180;}
+function getMouse(e){const r=canvas.getBoundingClientRect();const t=('touches'in e)?e.touches[0]:('changedTouches'in e?e.changedTouches[0]:e);
+  return{x:(t.clientX-r.left)*(canvas.width/r.width),y:(t.clientY-r.top)*(canvas.height/r.height)};}
 function defaultLayout(){
-  const c = center();
-  rig.torso = { pos:{x:c.x, y:c.y}, rot:0, scale:1, pivot:{x:0, y:0} };
-  rig.head  = { pos:{x:0, y:-180}, rot:0, scale:1, pivot:{x:0, y:0} };
-  rig.leftarm  = { pos:{x:-160, y:-40}, rot:0, scale:1, pivot:{x:40, y:40} };
-  rig.rightarm = { pos:{x:160, y:-40}, rot:0, scale:1, pivot:{x:-40, y:40} };
-  rig.shorts = { pos:{x:0, y:140}, rot:0, scale:1, pivot:{x:0, y:0} };
-  rig.leftleg  = { pos:{x:-60, y:220}, rot:0, scale:1, pivot:{x:20, y:20} };
-  rig.rightleg = { pos:{x:60,  y:220}, rot:0, scale:1, pivot:{x:-20, y:20} };
+  const c={x:canvas.width/2,y:canvas.height/2};
+  rig.torso={pos:{x:c.x,y:c.y},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.head={pos:{x:0,y:-180},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.leftUpperArm={pos:{x:-160,y:-40},rot:0,scale:1,pivot:{x:40,y:40}};
+  rig.leftLowerArm={pos:{x:120,y:0},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.rightUpperArm={pos:{x:160,y:-40},rot:0,scale:1,pivot:{x:-40,y:40}};
+  rig.rightLowerArm={pos:{x:-120,y:0},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.shorts={pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.leftUpperLeg={pos:{x:-60,y:220},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.leftLowerLeg={pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.rightUpperLeg={pos:{x:60,y:220},rot:0,scale:1,pivot:{x:0,y:0}};
+  rig.rightLowerLeg={pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}};
 }
+function saveRig(){try{localStorage.setItem(STORE_RIG,JSON.stringify({rig,split}));setStatus('rig saved ✓','ok');}catch{setStatus('save failed','warn');}}
+function loadRig(){try{const data=JSON.parse(localStorage.getItem(STORE_RIG)||'null');
+  if(!data){setStatus('no v2 rig yet','warn');return;}
+  rig=data.rig; if(data.split){Object.assign(split,data.split);}
+  syncUI(); render(); setStatus('rig loaded ✓','ok');}catch{setStatus('load failed','warn');}}
+function resetRig(){rig={}; defaultLayout(); syncUI(); render(); setStatus('rig reset ✓','ok');}
+function syncUI(){const R=rig[selected]; rotEl.value=(R.rot||0); scaleEl.value=Math.round((R.scale||1)*100);
+  splitLeftArmEl.value=split.leftArm*100; splitRightArmEl.value=split.rightArm*100; splitLeftLegEl.value=split.leftLeg*100; splitRightLegEl.value=split.rightLeg*100; }
 
-/* ---------- Load saved art ---------- */
-function loadArt(cb){
-  let missing = [];
-  let loaded = 0;
-  let total = PARTS.length;
-  let store = {};
-  try { store = JSON.parse(localStorage.getItem(STORE_ART) || '{}'); } catch {}
-  PARTS.forEach(p=>{
-    const url = store[p];
-    if(!url){ missing.push(p); loaded++; if(loaded===total) cb(missing); return; }
-    const img = new Image();
-    img.onload = ()=>{ images[p] = img; loaded++; if(loaded===total) cb(missing); };
-    img.onerror = ()=>{ missing.push(p); loaded++; if(loaded===total) cb(missing); };
-    img.src = url;
-  });
-}
-
-/* ---------- Save/Load rig ---------- */
-function saveRig(){
-  try{
-    localStorage.setItem(STORE_RIG, JSON.stringify(rig));
-    setStatus('rig saved ✓','ok');
-  }catch(e){
-    setStatus('rig save failed','warn');
-  }
-}
-function loadRig(){
-  try{
-    const data = JSON.parse(localStorage.getItem(STORE_RIG) || 'null');
-    if(!data){ setStatus('no rig saved yet','warn'); return; }
-    Object.assign(rig, data);
-    syncUIFromSelected();
-    setStatus('rig loaded ✓','ok');
-    render();
-  }catch(e){
-    setStatus('rig load failed','warn');
-  }
-}
-function resetRig(){
-  defaultLayout();
-  syncUIFromSelected();
-  render();
-  setStatus('rig reset to defaults','ok');
-}
-
-/* ---------- Transform stack & rendering ---------- */
 function withTransform(part, fn){
-  const R = rig[part];
+  // iterative parent-first
+  const stack=[];let cur=part;while(cur){stack.push(cur);cur=PARENT[cur];}
   ctx.save();
-  // Apply parent transform first (recursive)
-  const parent = PARENT[part];
-  if(parent){
-    withTransform(parent, ()=>{ /* inside parent space */ });
-    // after returning, parent's transform is active on context
+  for(let i=stack.length-1;i>=0;i--){
+    const id=stack[i],R=rig[id];
+    ctx.translate(R.pos.x,R.pos.y);
+    ctx.translate(R.pivot.x,R.pivot.y);
+    ctx.rotate(toRad(R.rot||0));
+    ctx.scale(R.scale||1,R.scale||1);
+    ctx.translate(-R.pivot.x,-R.pivot.y);
   }
-  // If parent exists, we need to re-apply only once — but the recursion above
-  // already pushed + applied it. Because we nested save inside, we need a trick:
-  // Instead, compute transforms iteratively.
-  ctx.restore();
-  // Use iterative approach:
-  const stack = [];
-  let cur = part;
-  while(cur){
-    stack.push(cur);
-    cur = PARENT[cur];
-  }
-  // Now apply root-first
-  ctx.save();
-  for(let i=stack.length-1; i>=0; i--){
-    const id = stack[i];
-    const T = rig[id];
-    // Translate to node position
-    ctx.translate(T.pos.x, T.pos.y);
-    // Apply rotation/scale around pivot
-    ctx.translate(T.pivot.x, T.pivot.y);
-    ctx.rotate(toRad(T.rot || 0));
-    ctx.scale(T.scale || 1, T.scale || 1);
-    ctx.translate(-T.pivot.x, -T.pivot.y);
-  }
-  fn();
-  ctx.restore();
+  fn(); ctx.restore();
 }
 
-function drawImageFor(part, alpha=1){
-  const img = images[part];
-  if(!img) return;
-  // Draw centered on its local origin (0,0) with fit
-  const max = 300; // per-part local fit size for preview
-  const s = Math.min(max/img.width, max/img.height, 1);
-  const w = img.width * s, h = img.height * s;
-  const x = -w/2, y = -h/2; // local origin at image center
-  ctx.globalAlpha = alpha;
+function drawCropped(img, segment, splitPct){
+  const max=300, s=Math.min(max/img.width,max/img.height,1);
+  const w=img.width*s, h=img.height*s;
+  const x=-w/2, y=-h/2;
+  const cut=h*splitPct; // in drawn space
+  ctx.save();
+  ctx.beginPath();
+  if(segment==='upper'){ ctx.rect(x, y, w, cut); }
+  else { ctx.rect(x, y+cut, w, h-cut); }
+  ctx.clip();
   ctx.drawImage(img, x, y, w, h);
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
-function drawPivotCross(part){
-  const T = rig[part];
-  withTransform(part, ()=>{
-    // pivot in local coords is T.pivot; we’ve already transformed so draw at its location
-    ctx.save();
-    ctx.translate(T.pivot.x, T.pivot.y);
-    ctx.strokeStyle = '#5eead4';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-10,0); ctx.lineTo(10,0);
-    ctx.moveTo(0,-10); ctx.lineTo(0,10);
-    ctx.stroke();
-    ctx.restore();
-  });
+function sourceFor(part){
+  if(part.includes('Arm')) return part.startsWith('left')? srcImages.leftarm : srcImages.rightarm;
+  if(part.includes('Leg')) return part.startsWith('left')? srcImages.leftleg : srcImages.rightleg;
+  if(part==='head')return srcImages.head;
+  if(part==='torso')return srcImages.torso;
+  if(part==='shorts')return srcImages.shorts;
+  return null;
 }
 
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  // Draw in hierarchy order: torso(root) → head, arms, shorts → legs
-  const order = ['torso','head','leftarm','rightarm','shorts','leftleg','rightleg'];
-  order.forEach(p=>{
+  const order=['torso','shorts','leftUpperLeg','leftLowerLeg','rightUpperLeg','rightLowerLeg','leftUpperArm','leftLowerArm','rightUpperArm','rightLowerArm','head'];
+  for(const p of order){
+    const img=sourceFor(p); if(!img) continue;
     withTransform(p, ()=>{
-      drawImageFor(p, 1);
+      if(p.includes('Arm')){
+        const seg=p.includes('Upper')?'upper':'lower';
+        const pct = (p.startsWith('left')? split.leftArm : split.rightArm);
+        drawCropped(img, seg, pct);
+      }else if(p.includes('Leg')){
+        const seg=p.includes('Upper')?'upper':'lower';
+        const pct = (p.startsWith('left')? split.leftLeg : split.rightLeg);
+        drawCropped(img, seg, pct);
+      }else{
+        // head/torso/shorts full draw
+        const max=300, s=Math.min(max/img.width,max/img.height,1);
+        const w=img.width*s, h=img.height*s, x=-w/2, y=-h/2;
+        ctx.drawImage(img, x, y, w, h);
+      }
     });
-  });
-  // Selected highlight & pivot cross
-  drawPivotCross(selected);
-  // Selected outline
+  }
+  // draw pivot
+  const T=rig[selected];
   withTransform(selected, ()=>{
     ctx.save();
-    ctx.strokeStyle = 'rgba(96,165,250,.8)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6,6]);
-    ctx.strokeRect(-160,-160,320,320); // rough handle box around local origin
+    ctx.translate(T.pivot.x,T.pivot.y);
+    ctx.strokeStyle='#5eead4';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(-10,0);ctx.lineTo(10,0);ctx.moveTo(0,-10);ctx.lineTo(0,10);ctx.stroke();
     ctx.restore();
+  });
+  // highlight box
+  withTransform(selected, ()=>{
+    ctx.save();ctx.strokeStyle='rgba(96,165,250,.8)';ctx.setLineDash([6,6]);ctx.lineWidth=2;
+    ctx.strokeRect(-160,-160,320,320);ctx.restore();
   });
 }
 
-/* ---------- Interaction ---------- */
-function pickDragMode(){ dragMode = editPivotEl.checked ? 'pivot' : 'part'; }
+/* input */
+function pickDragMode(){ dragMode = editPivotEl.checked?'pivot':'part'; }
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();dragging=true;last=getMouse(e);});
+canvas.addEventListener('pointermove',e=>{if(!dragging)return;e.preventDefault();const cur=getMouse(e);
+  const dx=cur.x-last.x, dy=cur.y-last.y; const R=rig[selected];
+  if(dragMode==='part'){ R.pos.x+=dx; R.pos.y+=dy; } else { R.pivot.x+=dx; R.pivot.y+=dy; }
+  last=cur; render();});
+['pointerup','pointercancel','touchend','touchcancel'].forEach(ev=>canvas.addEventListener(ev,()=>{dragging=false;}));
 
-canvas.addEventListener('pointerdown', (e)=>{
-  e.preventDefault();
-  dragging = true;
-  last = getMouse(e);
-});
-canvas.addEventListener('pointermove', (e)=>{
-  if(!dragging) return;
-  e.preventDefault();
-  const cur = getMouse(e);
-  const dx = cur.x - last.x, dy = cur.y - last.y;
-  const R = rig[selected];
-  if(dragMode === 'part'){
-    // Move part in its parent space
-    R.pos.x += dx;
-    R.pos.y += dy;
-  } else {
-    // Move pivot in local space (approximate: same dx/dy)
-    R.pivot.x += dx;
-    R.pivot.y += dy;
-  }
-  last = cur;
-  render();
-});
-['pointerup','pointercancel','touchend','touchcancel'].forEach(ev=>{
-  canvas.addEventListener(ev, ()=>{ dragging=false; });
-});
+partEl.addEventListener('change',()=>{selected=partEl.value;syncUI();render();});
+editPivotEl.addEventListener('change',()=>{pickDragMode();setStatus(editPivotEl.checked?'pivot mode':'move mode');});
+rotEl.addEventListener('input',()=>{rig[selected].rot=+rotEl.value;render();});
+scaleEl.addEventListener('input',()=>{rig[selected].scale=(+scaleEl.value)/100;render();});
+resetPoseBtn.addEventListener('click',()=>{['rot','scale'].forEach(k=>{});PARTS.forEach(p=>{rig[p].rot=0;rig[p].scale=1;});syncUI();render();setStatus('pose reset ✓','ok');});
+saveRigBtn.addEventListener('click',saveRig);
+loadRigBtn.addEventListener('click',loadRig);
+resetRigBtn.addEventListener('click',resetRig);
 
-/* ---------- UI sync ---------- */
-function syncUIFromSelected(){
-  const R = rig[selected];
-  rotEl.value = (R.rot||0);
-  scaleEl.value = Math.round((R.scale||1)*100);
+/* split sliders */
+function applySplit(){ split.leftArm=+splitLeftArmEl.value/100; split.rightArm=+splitRightArmEl.value/100;
+  split.leftLeg=+splitLeftLegEl.value/100; split.rightLeg=+splitRightLegEl.value/100; render(); }
+[splitLeftArmEl,splitRightArmEl,splitLeftLegEl,splitRightLegEl].forEach(el=>el.addEventListener('input',applySplit));
+
+/* load art */
+function loadArt(cb){
+  let store={};try{store=JSON.parse(localStorage.getItem(STORE_ART)||'{}');}catch{}
+  const need=['torso','head','leftarm','rightarm','shorts','leftleg','rightleg'];
+  let missing=[],done=0,total=need.length;
+  need.forEach(k=>{
+    const url=store[k];
+    if(!url){missing.push(k);done++;if(done===total)cb(missing);return;}
+    const img=new Image();img.onload=()=>{srcImages[k]=img;done++;if(done===total)cb(missing);};
+    img.onerror=()=>{missing.push(k);done++;if(done===total)cb(missing);};
+    img.src=url;
+  });
 }
-partEl.addEventListener('change', ()=>{
-  selected = partEl.value;
-  syncUIFromSelected();
-  render();
-});
-editPivotEl.addEventListener('change', ()=>{ pickDragMode(); setStatus(editPivotEl.checked?'pivot mode':'move mode'); });
 
-rotEl.addEventListener('input', ()=>{
-  rig[selected].rot = +rotEl.value;
-  render();
-});
-scaleEl.addEventListener('input', ()=>{
-  rig[selected].scale = (+scaleEl.value)/100;
-  render();
-});
-
-resetPoseBtn.addEventListener('click', ()=>{
-  // Only reset rotations/scales (keep positions/pivots)
-  PARTS.forEach(p=>{ rig[p].rot=0; rig[p].scale=1; });
-  syncUIFromSelected();
-  render();
-  setStatus('pose reset ✓','ok');
-});
-
-/* ---------- Rig buttons ---------- */
-saveRigBtn.addEventListener('click', saveRig);
-loadRigBtn.addEventListener('click', ()=>{ loadRig(); });
-resetRigBtn.addEventListener('click', ()=>{ resetRig(); });
-
-/* ---------- Boot ---------- */
+/* boot */
 (function init(){
   // defaults
-  defaultLayout();
+  rig={}; defaultLayout();
 
-  // load saved rig if exists
-  try{
-    const data = JSON.parse(localStorage.getItem(STORE_RIG) || 'null');
-    if(data){ Object.assign(rig, data); }
-  }catch{}
+  // load saved rig if present
+  try{ const data=JSON.parse(localStorage.getItem(STORE_RIG)||'null');
+    if(data){ rig=data.rig; if(data.split) Object.assign(split,data.split); }}catch{}
 
-  // load art
+  // set split sliders
+  syncUI();
+
   loadArt((missing)=>{
-    if(missing.length){
-      warn('Missing art for: ' + missing.join(', ') + '. Go back to Step 4 to save those parts.');
-    } else { warn(''); }
-    syncUIFromSelected();
+    if(missing.length) warn('Missing art for: '+[...new Set(missing)].join(', ')+'. Save them in Step 4.');
+    else warn('');
     render();
   });
 })();
