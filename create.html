@@ -27,7 +27,7 @@
     .step.active{color:var(--text);outline:2px solid var(--ring)}
     .ghost-toggle{display:flex;align-items:center;gap:8px}
     .footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px}
-    canvas{background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto}
+    canvas{background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto;touch-action:none;-ms-touch-action:none;}
     .preview{min-height:260px;display:grid;place-items:center}
     .warn{color:#fca5a5}
   </style>
@@ -164,19 +164,27 @@ document.getElementById('ghostToggle').addEventListener('change', (e)=>{
 
 // Guides
 function drawHeadGuide(c){
-  const g = new fabric.Circle({ left: 210, top: 160, radius: 150, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  const g = new fabric.Circle({ left: 210, top: 160, radius: 150, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
+  c.add(g); return g;
+});
   c.add(g); return g;
 }
 function drawTorsoGuide(c){
-  const r = new fabric.Rect({ left: 200, top: 140, width: 320, height: 420, rx: 40, ry: 40, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  const r = new fabric.Rect({ left: 200, top: 140, width: 320, height: 420, rx: 40, ry: 40, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
+  c.add(r); return r;
+});
   c.add(r); return r;
 }
 function drawArmGuide(c){
-  const r = new fabric.Rect({ left: 240, top: 190, width: 240, height: 300, rx: 60, ry: 60, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  const r = new fabric.Rect({ left: 240, top: 190, width: 240, height: 300, rx: 60, ry: 60, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
+  c.add(r); return r;
+});
   c.add(r); return r;
 }
 function drawLegGuide(c){
-  const r = new fabric.Rect({ left: 280, top: 160, width: 160, height: 420, rx: 50, ry: 50, stroke:'#6b7280', strokeDashArray:[8,8], fill:'transparent', opacity:.35, selectable:false, evented:false });
+  const r = new fabric.Rect({ left: 280, top: 160, width: 160, height: 420, rx: 50, ry: 50, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
+  c.add(r); return r;
+});
   c.add(r); return r;
 }
 
@@ -189,6 +197,7 @@ function loadPart(){
   // Reset canvas
   canvas.clear();
   canvas.setBackgroundColor('transparent', canvas.renderAll.bind(canvas));
+  canvas.isDrawingMode = true; // ensure drawing stays enabled
   canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
   canvas.freeDrawingBrush.width = +brush.value;
   canvas.freeDrawingBrush.color = color.value;
