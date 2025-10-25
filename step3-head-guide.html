@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Step 3 — Head Guide (Vanilla Canvas)</title>
+<title>Step 3 — Head Guide (Vanilla Canvas with Override)</title>
 <style>
   body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   main{max-width:900px;margin:0 auto;padding:16px}
@@ -17,7 +17,7 @@
   }
   .panel{background:#151821;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px}
   .muted{color:#9aa3b2}
-  button,input[type="range"],input[type="color"],input[type="checkbox"]{
+  button,input[type="range"],input[type="color"],input[type="checkbox"],input[type="file"]{
     appearance:none;background:#1a1f2b;color:#e9eef7;border:1px solid rgba(255,255,255,.12);
     padding:8px 10px;border-radius:10px;margin-right:8px
   }
@@ -27,8 +27,8 @@
 </head>
 <body>
 <main>
-  <h1>Step 3 — Head Guide (Vanilla Canvas)</h1>
-  <p class="muted">Goal: the <b>head.png</b> guide appears behind your drawing; the “Show guide” toggle hides/shows it. Finger/mouse lines must persist.</p>
+  <h1>Step 3 — Head Guide (Vanilla Canvas with Override)</h1>
+  <p class="muted">Base guide <code>assets/guides/head.png</code> loads by default. Uploading your own image overrides it. “Remove guide” reverts to the base. Toggle “Show guide” to hide/show.</p>
 
   <div class="row">
     <div class="panel">
@@ -45,60 +45,47 @@
     </div>
 
     <div class="panel">
-      <p id="status" class="muted">Status: loading guide…</p>
-      <p class="muted">Guide path: <code id="path">assets/guides/head.png</code></p>
+      <p id="status" class="muted">Status: loading base guide…</p>
+      <p class="muted">Base path: <code>assets/guides/head.png</code></p>
       <ul class="muted">
-        <li>If you don’t see the guide, check the path and open the Console (F12) for errors.</li>
-        <li>Draw lines, lift finger — strokes should remain.</li>
-        <li>Toggle “Show guide” on/off.</li>
+        <li>Draw lines, lift finger/mouse — strokes should remain.</li>
+        <li>Upload a PNG/JPG to override the base guide.</li>
+        <li>Click “Remove guide” to revert to the base guide.</li>
       </ul>
     </div>
   </div>
 </main>
 
 <script>
-const guidePath = 'assets/guides/head.png'; // adjust if needed
-document.getElementById('path').textContent = guidePath;
+/* ------- Config ------- */
+const baseGuidePath = 'assets/guides/head.png';
 
+/* ------- State ------- */
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
+
 const showEl = document.getElementById('show');
+const uploadEl = document.getElementById('upload');
+const removeEl = document.getElementById('remove');
+
 const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
 const clearBtn = document.getElementById('clear');
-const uploadEl = document.getElementById('upload');
-const removeEl = document.getElementById('remove');
 
-uploadEl.addEventListener('change', (e)=>{
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => { guideImg = img; drawAll(); setStatus('custom guide loaded ✓','ok'); };
-    img.onerror = () => { setStatus('failed to decode uploaded image','warn'); };
-    img.src = reader.result;
-  };
-  reader.readAsDataURL(file);
-});
+let baseGuideImg = null;     // preloaded default (head.png)
+let customGuideImg = null;   // user-uploaded override
+let guideImg = null;         // currently active (custom or base)
 
-removeEl.addEventListener('click', ()=>{
-  guideImg = null;
-  drawAll();
-  setStatus('guide removed');
-});
-
-
-let guideImg = null;
 let drawing = false;
 let lastX = 0, lastY = 0;
 
-// Backing store for strokes so we can re-draw over the guide toggle
-const strokes = []; // each stroke = { color, alpha, width, points:[{x,y},...] }
+// Backing store for strokes (so we can re-render on show/hide/override)
+const strokes = []; // each: { color, alpha, width, points:[{x,y},...] }
 let currentStroke = null;
 
+/* ------- Helpers ------- */
 function setStatus(t, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + t; }
 
 function hexToRgba(hex, alpha){
@@ -107,10 +94,6 @@ function hexToRgba(hex, alpha){
   const g = parseInt(v.substring(2,4),16);
   const b = parseInt(v.substring(4,6),16);
   return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function applyBrush(){
-  // no-op here; we use values directly when drawing
 }
 
 function getPos(e){
@@ -122,52 +105,20 @@ function getPos(e){
   };
 }
 
-function start(e){
-  e.preventDefault();
-  drawing = true;
-  const p = getPos(e);
-  lastX = p.x; lastY = p.y;
-  currentStroke = {
-    color: col.value,
-    alpha: (+o.value)/100,
-    width: +w.value,
-    points: [{x:p.x,y:p.y}]
-  };
-  setStatus('drawing…');
-}
-
-function move(e){
-  if(!drawing) return;
-  e.preventDefault();
-  const p = getPos(e);
-  currentStroke.points.push({x:p.x,y:p.y});
-  drawAll(); // re-render immediately for smoothness
-  lastX = p.x; lastY = p.y;
-}
-
-function end(e){
-  if(!drawing) return;
-  e.preventDefault();
-  drawing = false;
-  strokes.push(currentStroke);
-  currentStroke = null;
-  drawAll();
-  setStatus('finger/mouse lifted; stroke persists ✓','ok');
-}
-
+/* ------- Drawing pipeline ------- */
 function drawGuide(){
-  if (!guideImg || !showEl.checked) return;
-  // Fit guide into canvas with margin
+  const img = guideImg;
+  if (!img || !showEl.checked) return;
   const max = 640;
-  const sx = max / guideImg.width;
-  const sy = max / guideImg.height;
+  const sx = max / img.width;
+  const sy = max / img.height;
   const s = Math.min(sx, sy, 1);
-  const w = guideImg.width * s;
-  const h = guideImg.height * s;
+  const w = img.width * s;
+  const h = img.height * s;
   const x = (canvas.width - w)/2;
   const y = (canvas.height - h)/2;
   ctx.globalAlpha = 0.45;
-  ctx.drawImage(guideImg, x, y, w, h);
+  ctx.drawImage(img, x, y, w, h);
   ctx.globalAlpha = 1;
 }
 
@@ -191,14 +142,40 @@ function drawAll(){
   if (currentStroke) drawStroke(currentStroke);
 }
 
-function clearAll(){
-  strokes.length = 0;
-  currentStroke = null;
-  drawAll();
-  setStatus('cleared');
+/* ------- Events ------- */
+function start(e){
+  e.preventDefault();
+  drawing = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  currentStroke = {
+    color: col.value,
+    alpha: (+o.value)/100,
+    width: +w.value,
+    points: [{x:p.x,y:p.y}]
+  };
+  setStatus('drawing…');
 }
 
-// Event listeners
+function move(e){
+  if(!drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  currentStroke.points.push({x:p.x,y:p.y});
+  drawAll();
+  lastX = p.x; lastY = p.y;
+}
+
+function end(e){
+  if(!drawing) return;
+  e.preventDefault();
+  drawing = false;
+  strokes.push(currentStroke);
+  currentStroke = null;
+  drawAll();
+  setStatus('finger/mouse lifted; stroke persists ✓','ok');
+}
+
 canvas.addEventListener('pointerdown', start, { passive:false });
 canvas.addEventListener('pointermove', move, { passive:false });
 canvas.addEventListener('pointerup', end, { passive:false });
@@ -207,21 +184,56 @@ canvas.addEventListener('touchstart', start, { passive:false });
 canvas.addEventListener('touchmove', move, { passive:false });
 canvas.addEventListener('touchend', end, { passive:false });
 
-w.addEventListener('input', applyBrush);
-o.addEventListener('input', applyBrush);
-col.addEventListener('input', applyBrush);
-clearBtn.addEventListener('click', clearAll);
+w.addEventListener('input', drawAll);
+o.addEventListener('input', drawAll);
+col.addEventListener('input', drawAll);
+document.getElementById('clear').addEventListener('click', ()=>{
+  strokes.length = 0; currentStroke = null; drawAll(); setStatus('cleared');
+});
 showEl.addEventListener('change', drawAll);
 
-// Load the head guide
-(function loadGuide(){
-  setStatus('loading guide…');
+/* ------- Guide override controls ------- */
+uploadEl.addEventListener('change', (e)=>{
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      customGuideImg = img;
+      guideImg = customGuideImg || baseGuideImg;
+      drawAll();
+      setStatus('custom guide loaded ✓','ok');
+    };
+    img.onerror = () => setStatus('failed to decode uploaded image','warn');
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+removeEl.addEventListener('click', ()=>{
+  customGuideImg = null;
+  guideImg = baseGuideImg;
+  drawAll();
+  setStatus('reverted to base guide ✓','ok');
+});
+
+/* ------- Base preload ------- */
+(function preloadBaseGuide(){
+  setStatus('loading base guide…');
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  // Add a cache-buster in case phone cached old version
-  img.src = guidePath + '?v=' + Date.now().toString().slice(-6);
-  img.onload = () => { guideImg = img; drawAll(); setStatus('guide loaded ✓','ok'); };
-  img.onerror = () => { setStatus('failed to load ' + guidePath,'warn'); console.error('Failed guide path:', guidePath); };
+  img.src = baseGuidePath + '?v=' + Date.now().toString().slice(-6); // cache-buster
+  img.onload = () => {
+    baseGuideImg = img;
+    guideImg = customGuideImg || baseGuideImg;
+    drawAll();
+    setStatus('base guide loaded ✓','ok');
+  };
+  img.onerror = () => {
+    setStatus('failed to load ' + baseGuidePath, 'warn');
+    console.error('Failed base guide path:', baseGuidePath);
+  };
 })();
 
 setStatus('ready');
