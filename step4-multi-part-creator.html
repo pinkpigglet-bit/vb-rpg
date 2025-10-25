@@ -96,28 +96,12 @@ const uploadEl = document.getElementById('upload');
 const removeEl = document.getElementById('remove');
 const clearBtn = document.getElementById('clear');
 const saveBtn = document.getElementById('save');
-
+const resetBtn = document.getElementById('reset');
 const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
-  // Place this with your other DOM refs:
-const resetBtn = document.getElementById('reset');
 
-// Add this listener near the Save button’s listener:
-resetBtn.addEventListener('click', () => {
-  try {
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-    delete store[currentPart];
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  } catch(e) {
-    console.warn('localStorage reset failed', e);
-  }
-  savedArtImg = null;      // remove the locked saved layer
-  strokes.length = 0;      // clear current session strokes
-  currentStroke = null;
-  drawAll();
-  setStatus(`cleared saved ${currentPart} drawing ✓`, 'ok');
-});
+
 
 
 /* ------- Guide & layers state ------- */
@@ -309,6 +293,21 @@ saveBtn.addEventListener('click', ()=>{
   setStatus((ok ? `saved ${currentPart} locally and ` : '') + 'download started ✓','ok');
   // After saving, refresh the savedArt layer so continued drawing builds on the saved PNG
   loadSavedArtLayer(currentPart, () => drawAll());
+});
+
+resetBtn.addEventListener('click', () => {
+  try {
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    delete store[currentPart];
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch(e) {
+    console.warn('localStorage reset failed', e);
+  }
+  savedArtImg = null;      // remove the locked saved layer
+  strokes.length = 0;      // clear current session strokes
+  currentStroke = null;
+  drawAll();
+  setStatus(`cleared saved ${currentPart} drawing ✓`, 'ok');
 });
 
 /* ------- Guide override ------- */
