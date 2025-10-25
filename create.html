@@ -6,20 +6,33 @@
   <title>Create Your Athlete</title>
   <style>
     :root{
-      --bg:#0e0f12;--card:#151821;--muted:#9aa3b2;--text:#e9eef7;--accent:#5eead4;--accent2:#60a5fa;--ring:rgba(94,234,212,.5);
+      --bg:#0e0f12;--card:#151821;--muted:#9aa3b2;--text:#e9eef7;
+      --accent:#5eead4;--accent2:#60a5fa;--ring:rgba(94,234,212,.5);
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:radial-gradient(1200px 600px at 50% -10%, #121521, var(--bg));color:var(--text)}
-    header{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(to bottom, rgba(21,24,33,.9), rgba(21,24,33,.6));backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);z-index:10}
+    body{
+      margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:radial-gradient(1200px 600px at 50% -10%, #121521, var(--bg));color:var(--text)
+    }
+    header{
+      position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;
+      padding:12px 16px;background:linear-gradient(to bottom, rgba(21,24,33,.9), rgba(21,24,33,.6));
+      backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);z-index:10
+    }
     .brand{display:flex;gap:10px;align-items:center;font-weight:700}
-    .logo{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0b1020}
+    .logo{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0b1020}
     main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
-    .card{background:linear-gradient(145deg, rgba(21,24,33,.9), rgba(21,24,33,.65));border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .card{background:linear-gradient(145deg, rgba(21,24,33,.9), rgba(21,24,33,.65));
+      border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
     .row{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
     @media(max-width:900px){.row{grid-template-columns:1fr;}}
     .pad{padding:16px}
     .tools{display:flex;flex-wrap:wrap;gap:8px}
-    button,select,input[type="range"]{appearance:none;background:#1a1f2b;border:1px solid rgba(255,255,255,.08);color:var(--text);padding:8px 10px;border-radius:10px}
+    button,select,input[type="range"],input[type="file"]{
+      appearance:none;background:#1a1f2b;border:1px solid rgba(255,255,255,.08);color:var(--text);
+      padding:8px 10px;border-radius:10px
+    }
     button:hover{background:#1f2533}
     .hint{color:var(--muted);font-size:.95rem}
     .steps{display:flex;gap:8px;flex-wrap:wrap}
@@ -27,7 +40,10 @@
     .step.active{color:var(--text);outline:2px solid var(--ring)}
     .ghost-toggle{display:flex;align-items:center;gap:8px}
     .footer{display:flex;justify-content:space-between;gap:10px;margin-top:12px}
-    canvas{background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto;touch-action:none;-ms-touch-action:none;}
+    canvas{
+      background:#0f1219;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;height:auto;
+      touch-action:none;-ms-touch-action:none; /* keep finger strokes from scrolling the page */
+    }
     .preview{min-height:260px;display:grid;place-items:center}
     .warn{color:#fca5a5}
   </style>
@@ -39,30 +55,42 @@
     <div class="brand"><div class="logo">VB</div><div>Create Your Athlete</div></div>
     <a href="./index.html" style="color:var(--text);text-decoration:none">◀ Home</a>
   </header>
+
   <main>
     <section class="card pad">
       <div class="steps" id="steps"></div>
       <h2 id="title" style="margin:10px 0 6px">Design: Head</h2>
-      <p class="hint">Draw directly on the canvas. Use the faint guide for sizing. When you're happy, click <b>Save Part</b>, then <b>Next</b>.</p>
+      <p class="hint">Use the template guide or upload your own. Draw over it, then <b>Save Part</b> and go <b>Next</b>.</p>
+
       <div class="row">
         <div class="pad" style="padding:0">
           <canvas id="draw" width="720" height="720" aria-label="Drawing canvas"></canvas>
+
           <div class="pad" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
             <div class="tools">
-              <label>Brush: <input type="range" id="brush" min="1" max="40" value="8"/></label>
-              <label>Opacity: <input type="range" id="opacity" min="10" max="100" value="100"/></label>
-              <label>Color: <input type="color" id="color" value="#60a5fa"/></label>
+              <label>Brush: <input type="range" id="brush" min="1" max="40" value="8"></label>
+              <label>Opacity: <input type="range" id="opacity" min="10" max="100" value="100"></label>
+              <label>Color: <input type="color" id="color" value="#60a5fa"></label>
               <button id="undo">Undo</button>
               <button id="clear">Clear</button>
             </div>
-            <div class="ghost-toggle"><input type="checkbox" id="ghostToggle" checked/> <label for="ghostToggle">Show guide</label></div>
+            <div class="ghost-toggle">
+              <input type="checkbox" id="ghostToggle" checked> <label for="ghostToggle">Show guide</label>
+            </div>
+            <div class="tools">
+              <input id="guideUpload" type="file" accept="image/*">
+              <button id="useRepoGuide">Use template</button>
+              <button id="removeGuide">Hide template</button>
+            </div>
           </div>
         </div>
+
         <div class="pad" style="display:grid;gap:12px">
           <div class="card pad preview">
             <canvas id="preview" width="280" height="280" aria-label="Preview"></canvas>
           </div>
-          <div class="hint">This preview shows the exported PNG for this part with transparency. Keep strokes within the guide for best rigging later.</div>
+          <div class="hint">This preview shows the exported PNG for this part with transparency.</div>
+
           <div class="footer">
             <div>
               <button id="savePart">Save Part</button>
@@ -81,162 +109,175 @@
     <section class="card pad">
       <h3>Tips</h3>
       <ul>
-        <li>Use simple, bold shapes—this is a cut-out puppet for animation.</li>
-        <li>Stay inside the ghost outline so parts align later.</li>
-        <li>You can come back and redraw any part at any time.</li>
+        <li>Keep strokes inside the template for easy rigging later.</li>
+        <li>Use simple shapes; this will be a cut-out puppet.</li>
+        <li>You can jump between steps using the chips at the top.</li>
       </ul>
     </section>
   </main>
 
 <script>
-// --- Simple guided drawing flow with Fabric.js ---
+/* ---------- PART DEFINITIONS (matches your filenames) ---------- */
 const PARTS = [
-  {id:'head', title:'Head', guide: drawHeadGuide},
-  {id:'torso', title:'Torso', guide: drawTorsoGuide},
-  {id:'armL', title:'Left Arm', guide: drawArmGuide},
-  {id:'armR', title:'Right Arm', guide: drawArmGuide},
-  {id:'legL', title:'Left Leg', guide: drawLegGuide},
-  {id:'legR', title:'Right Leg', guide: drawLegGuide},
-  // You can split arms/legs later into upper/lower if you prefer
+  { id:'head',     title:'Head',     guidePath:'assets/guides/head.png' },
+  { id:'torso',    title:'Torso',    guidePath:'assets/guides/torso.png' },
+  { id:'leftarm',  title:'Left Arm', guidePath:'assets/guides/leftarm.png' },
+  { id:'rightarm', title:'Right Arm',guidePath:'assets/guides/rightarm.png' },
+  { id:'shorts',   title:'Shorts',   guidePath:'assets/guides/shorts.png' },
+  { id:'leftleg',  title:'Left Leg', guidePath:'assets/guides/leftleg.png' },
+  { id:'rightleg', title:'Right Leg',guidePath:'assets/guides/rightleg.png' }
 ];
 
+// Where we store the user-drawn PNGs
 const KEY_STORE = 'vbgame.characterArt.v1';
 const S = JSON.parse(localStorage.getItem(KEY_STORE) || '{}');
-let idx = Math.max(0, PARTS.findIndex(p => !S[p.id]));
-if (idx === -1) idx = 0; // safety
 
-// --- UI elements
+// Figure out where to start (first unsaved part)
+let idx = PARTS.findIndex(p => !S[p.id]);
+if (idx === -1) idx = 0;
+
+/* ---------- UI references ---------- */
 const stepsEl = document.getElementById('steps');
 const titleEl = document.getElementById('title');
 const saveStatus = document.getElementById('saveStatus');
 const warnEl = document.getElementById('warn');
+const brushEl = document.getElementById('brush');
+const opacityEl = document.getElementById('opacity');
+const colorEl = document.getElementById('color');
+const guideUpload = document.getElementById('guideUpload');
+const ghostToggle = document.getElementById('ghostToggle');
 
-// Steps chips
+/* ---------- Fabric canvases ---------- */
+const canvas = new fabric.Canvas('draw', { isDrawingMode: true, backgroundColor: 'transparent' });
+const preview = new fabric.StaticCanvas('preview');
+let ghostLayer = null; // current guide image
+
+/* ---------- Steps chips ---------- */
 function renderSteps(){
   stepsEl.innerHTML = '';
   PARTS.forEach((p, i)=>{
     const chip = document.createElement('div');
-    chip.className = 'step' + (i===idx ? ' active' : '') + (S[p.id] ? '' : '');
+    chip.className = 'step' + (i===idx ? ' active' : '');
     chip.textContent = (i+1)+'. '+p.title + (S[p.id] ? ' ✓' : '');
     chip.style.cursor = 'pointer';
-    chip.addEventListener('click', ()=>{ idx=i; loadPart(); });
+    chip.addEventListener('click', ()=>{ idx = i; loadPart(); });
     stepsEl.appendChild(chip);
   });
 }
 
-// Fabric setup
-const canvas = new fabric.Canvas('draw', { isDrawingMode: true, backgroundColor: 'transparent' });
-const preview = new fabric.StaticCanvas('preview');
-let ghostLayer; // guide
-let history = [];
-
-function pushHistory(){
-  history.push(JSON.stringify(canvas));
-  if (history.length > 50) history.shift();
-}
-
-canvas.on('path:created', pushHistory);
-
-// Controls
-const brush = document.getElementById('brush');
-const opacity = document.getElementById('opacity');
-const color = document.getElementById('color');
-brush.addEventListener('input', ()=>{canvas.freeDrawingBrush.width = +brush.value;});
-opacity.addEventListener('input', ()=>{canvas.freeDrawingBrush.opacity = (+opacity.value)/100;});
-color.addEventListener('input', ()=>{canvas.freeDrawingBrush.color = color.value;});
+/* ---------- Controls ---------- */
+brushEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.width = +brushEl.value; });
+opacityEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.opacity = (+opacityEl.value) / 100; });
+colorEl.addEventListener('input', ()=>{ canvas.freeDrawingBrush.color = colorEl.value; });
 
 document.getElementById('undo').addEventListener('click', ()=>{
-  const objs = canvas.getObjects();
+  const objs = canvas.getObjects().filter(o => o !== ghostLayer);
   if (!objs.length) return;
-  const last = objs.pop();
+  const last = objs[objs.length - 1];
   canvas.remove(last); canvas.requestRenderAll();
+  updatePreview();
 });
 
 document.getElementById('clear').addEventListener('click', ()=>{
-  canvas.getObjects().forEach(o=> canvas.remove(o));
-  canvas.requestRenderAll();
+  canvas.getObjects().slice().forEach(o => { if (o !== ghostLayer) canvas.remove(o); });
+  canvas.requestRenderAll(); updatePreview();
 });
 
-document.getElementById('ghostToggle').addEventListener('change', (e)=>{
-  if (ghostLayer) ghostLayer.visible = e.target.checked;
-  canvas.requestRenderAll();
+document.getElementById('removeGuide').addEventListener('click', ()=>{
+  if (ghostLayer){ canvas.remove(ghostLayer); ghostLayer = null; canvas.requestRenderAll(); }
 });
 
-// Guides
-function drawHeadGuide(c){
-  const g = new fabric.Circle({ left: 210, top: 160, radius: 150, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
-  c.add(g); return g;
+document.getElementById('useRepoGuide').addEventListener('click', ()=>{
+  const url = PARTS[idx].guidePath;
+  if (url) loadGuideImage(url);
 });
-  c.add(g); return g;
-}
-function drawTorsoGuide(c){
-  const r = new fabric.Rect({ left: 200, top: 140, width: 320, height: 420, rx: 40, ry: 40, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
-  c.add(r); return r;
+
+ghostToggle.addEventListener('change', (e)=>{
+  if (ghostLayer) { ghostLayer.visible = e.target.checked; canvas.requestRenderAll(); }
 });
-  c.add(r); return r;
-}
-function drawArmGuide(c){
-  const r = new fabric.Rect({ left: 240, top: 190, width: 240, height: 300, rx: 60, ry: 60, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
-  c.add(r); return r;
+
+/* Upload a custom guide image (from phone photos) */
+guideUpload.addEventListener('change', (e)=>{
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=> loadGuideImage(reader.result);
+  reader.readAsDataURL(file);
 });
-  c.add(r); return r;
-}
-function drawLegGuide(c){
-  const r = new fabric.Rect({ left: 280, top: 160, width: 160, height: 420, rx: 50, ry: 50, stroke:'#94a3b8', strokeWidth:3, strokeDashArray:[8,8], fill:'transparent', opacity:.6, selectable:false, evented:false });
-  c.add(r); return r;
-});
-  c.add(r); return r;
+
+/* ---------- Guide loader ---------- */
+function loadGuideImage(src){
+  if (ghostLayer){ canvas.remove(ghostLayer); ghostLayer = null; }
+  fabric.Image.fromURL(src, (img)=>{
+    const max = 640; // leave margins inside 720x720
+    const scale = Math.min(max / img.width, max / img.height, 1);
+    img.set({
+      left:(720 - img.width*scale)/2,
+      top: (720 - img.height*scale)/2,
+      scaleX:scale, scaleY:scale,
+      opacity:0.45, selectable:false, evented:false, hoverCursor:'default'
+    });
+    ghostLayer = img;
+    canvas.add(img);
+    img.sendToBack();
+    canvas.requestRenderAll();
+  }, { crossOrigin:'anonymous' });
 }
 
-// Load current part
+/* ---------- Load a part ---------- */
 function loadPart(){
   renderSteps();
   saveStatus.textContent = '';
   warnEl.textContent = '';
   titleEl.textContent = 'Design: ' + PARTS[idx].title;
-  // Reset canvas
+
+  // Reset canvas & brush
   canvas.clear();
   canvas.setBackgroundColor('transparent', canvas.renderAll.bind(canvas));
-  canvas.isDrawingMode = true; // ensure drawing stays enabled
+  canvas.isDrawingMode = true;
   canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-  canvas.freeDrawingBrush.width = +brush.value;
-  canvas.freeDrawingBrush.color = color.value;
-  canvas.freeDrawingBrush.opacity = (+opacity.value)/100;
-  // Guide
-  ghostLayer = PARTS[idx].guide(canvas);
-  // Load previous drawing if exists
-  const dataUrl = S[PARTS[idx].id];
-  if (dataUrl){
-    fabric.Image.fromURL(dataUrl, img=>{
-      img.set({ left: 0, top: 0, selectable:false, evented:false });
-      canvas.add(img); // place below new strokes
-      img.sendToBack();
-      if (ghostLayer) ghostLayer.bringToFront();
+  canvas.freeDrawingBrush.width = +brushEl.value;
+  canvas.freeDrawingBrush.color = colorEl.value;
+  canvas.freeDrawingBrush.opacity = (+opacityEl.value)/100;
+
+  // Default: load the repo template for this part
+  if (ghostToggle.checked && PARTS[idx].guidePath) {
+    loadGuideImage(PARTS[idx].guidePath);
+  }
+
+  // If the user has a saved drawing for this part, show it under the current strokes
+  const savedUrl = S[PARTS[idx].id];
+  if (savedUrl){
+    fabric.Image.fromURL(savedUrl, img=>{
+      img.set({ left:0, top:0, selectable:false, evented:false });
+      canvas.add(img);
+      if (ghostLayer) ghostLayer.bringToFront(); // template stays above old drawing
       canvas.requestRenderAll();
     }, {crossOrigin:'anonymous'});
   }
-  // Update preview
+
   updatePreview();
 }
 
+/* ---------- Preview exporter ---------- */
 function updatePreview(){
-  const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
+  const url = canvas.toDataURL({
+    format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true
+  });
   preview.clear();
   fabric.Image.fromURL(url, img=>{
-    img.set({ left: 20, top: 20, scaleX: 240/720, scaleY: 240/720, selectable:false, evented:false });
+    img.set({ left:20, top:20, scaleX:240/720, scaleY:240/720, selectable:false, evented:false });
     preview.add(img);
   });
 }
-
 canvas.on('after:render', ()=>{
-  // update preview throttle
   if (updatePreview._t) cancelAnimationFrame(updatePreview._t);
   updatePreview._t = requestAnimationFrame(updatePreview);
 });
 
-// Save current part
+/* ---------- Save ---------- */
 function saveCurrent(){
-  // export PNG with transparency
+  // Export PNG with transparency, excluding transform
   const url = canvas.toDataURL({ format:'png', enableRetinaScaling:false, multiplier:1, withoutTransform:true });
   const id = PARTS[idx].id;
   S[id] = url;
@@ -244,27 +285,21 @@ function saveCurrent(){
   saveStatus.textContent = `Saved ${PARTS[idx].title} ✓`;
   renderSteps();
 }
-
 document.getElementById('savePart').addEventListener('click', saveCurrent);
 
+/* ---------- Navigation ---------- */
 document.getElementById('next').addEventListener('click', ()=>{
-  // require save before moving on
   if (!S[PARTS[idx].id]){ warnEl.textContent = 'Please Save Part before continuing.'; return; }
   if (idx < PARTS.length-1){ idx++; loadPart(); }
-  else {
-    // Finished all parts → go to rig step (future page)
-    window.location.href = 'rig.html';
-  }
+  else { window.location.href = 'index.html'; } // all done for now (could go to rig.html later)
 });
 
 document.getElementById('back').addEventListener('click', ()=>{
   if (idx>0){ idx--; loadPart(); }
-  else {
-    window.location.href = 'index.html';
-  }
+  else { window.location.href = 'index.html'; }
 });
 
-// Boot
+/* ---------- Boot ---------- */
 renderSteps();
 loadPart();
 </script>
