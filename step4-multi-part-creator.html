@@ -61,7 +61,9 @@
         <input id="upload" type="file" accept="image/*">
         <button id="remove">Remove guide</button>
         <button id="clear">Clear</button>
-        <button id="save">Save Part</button>
+        <button id="save">Save Part</button
+        <button id="reset">Reset Part</button>
+
       </div>
     </div>
 
@@ -98,6 +100,25 @@ const saveBtn = document.getElementById('save');
 const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
+  // Place this with your other DOM refs:
+const resetBtn = document.getElementById('reset');
+
+// Add this listener near the Save button’s listener:
+resetBtn.addEventListener('click', () => {
+  try {
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    delete store[currentPart];
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch(e) {
+    console.warn('localStorage reset failed', e);
+  }
+  savedArtImg = null;      // remove the locked saved layer
+  strokes.length = 0;      // clear current session strokes
+  currentStroke = null;
+  drawAll();
+  setStatus(`cleared saved ${currentPart} drawing ✓`, 'ok');
+});
+
 
 /* ------- Guide & layers state ------- */
 let currentPart = partEl.value;
