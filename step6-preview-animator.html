@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Step 6 — Preview / Animator</title>
+<title>Step 6 — Preview / Animator (Auto-Center)</title>
 <style>
   body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   main{max-width:1100px;margin:0 auto;padding:16px}
@@ -13,7 +13,6 @@
   canvas{
     display:block;width:100%;max-width:720px;height:auto;
     background:#0f1219;border:1px solid rgba(255,255,255,.12);border-radius:12px;
-    touch-action:none;-ms-touch-action:none;
   }
   .panel{background:#151821;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px}
   .muted{color:#9aa3b2}.ok{color:#5eead4}.warn{color:#fca5a5}
@@ -29,10 +28,7 @@
 <body>
 <main>
   <h1>Step 6 — Preview / Animator</h1>
-  <p class="muted">
-    Loads art from <code>vbgame.characterArt.v1</code> and rig from <code>vbgame.rig.v1</code>.  
-    Animations add temporary offsets (they don’t overwrite your rig).
-  </p>
+  <p class="muted">Loads art from <code>vbgame.characterArt.v1</code> and rig from <code>vbgame.rig.v1</code>. Auto-centers the character every frame.</p>
 
   <div class="row">
     <div class="panel">
@@ -53,7 +49,6 @@
         <button id="reloadRig">Reload rig</button>
       </div>
       <div class="controls">
-        <button id="center">Center character</button>
         <button id="fit">Fit to canvas</button>
         <span id="status" class="muted">Status: ready</span>
       </div>
@@ -63,9 +58,7 @@
       <div class="stack">
         <b>Notes</b>
         <ul class="muted">
-          <li>If parts are missing, go to Step 4 and save them.</li>
-          <li>To change pivots/positions, go back to Step 5 (Rig Editor), save rig, then click <b>Reload rig</b> here.</li>
-          <li>This page never edits your rig; it only adds animated offsets during playback.</li>
+          <li>Go to Step 5 to change pivots/positions, then click Reload rig here.</li>
         </ul>
         <div id="warnings" class="warn"></div>
       </div>
@@ -74,117 +67,93 @@
 </main>
 
 <script>
-/* -------- Stores & parts -------- */
-const STORE_ART = 'vbgame.characterArt.v1';
-const STORE_RIG = 'vbgame.rig.v1';
-const PARTS = ['torso','head','leftarm','rightarm','shorts','leftleg','rightleg'];
-const PARENT = { torso:null, head:'torso', leftarm:'torso', rightarm:'torso', shorts:'torso', leftleg:'shorts', rightleg:'shorts' };
+const STORE_ART='vbgame.characterArt.v1';
+const STORE_RIG='vbgame.rig.v2'; // NOTE: new default uses v2 naming once you save in new rig editor
+// Back-compat: if v2 missing, fall back to v1:
+const STORE_RIG_FALLBACK='vbgame.rig.v1';
 
-/* -------- DOM -------- */
-const cvs = document.getElementById('view');
-const ctx = cvs.getContext('2d');
-const animEl = document.getElementById('anim');
-const speedEl = document.getElementById('speed');
-const playBtn = document.getElementById('play');
-const pauseBtn = document.getElementById('pause');
-const resetPoseBtn = document.getElementById('resetPose');
-const reloadRigBtn = document.getElementById('reloadRig');
-const centerBtn = document.getElementById('center');
-const fitBtn = document.getElementById('fit');
-const statusEl = document.getElementById('status');
-const warnEl = document.getElementById('warnings');
+const PARTS=['torso','head','leftUpperArm','leftLowerArm','rightUpperArm','rightLowerArm','shorts','leftUpperLeg','leftLowerLeg','rightUpperLeg','rightLowerLeg'];
+const PARENT={ torso:null, head:'torso',
+  leftUpperArm:'torso', leftLowerArm:'leftUpperArm',
+  rightUpperArm:'torso', rightLowerArm:'rightUpperArm',
+  shorts:'torso', leftUpperLeg:'shorts', leftLowerLeg:'leftUpperLeg',
+  rightUpperLeg:'shorts', rightLowerLeg:'rightUpperLeg'
+};
 
-/* -------- State -------- */
-let images = {};   // part -> HTMLImageElement
-let baseRig = {};  // part -> {pos, rot, scale, pivot}
-let workRig = {};  // a working copy we can reset to base between frames
-let playing = true;
-let t0 = performance.now();
-let centerOffset = { x: cvs.width/2, y: cvs.height/2 };
-let globalScale = 1;
+const cvs=document.getElementById('view');
+const ctx=cvs.getContext('2d');
+const animEl=document.getElementById('anim');
+const speedEl=document.getElementById('speed');
+const playBtn=document.getElementById('play');
+const pauseBtn=document.getElementById('pause');
+const resetPoseBtn=document.getElementById('resetPose');
+const reloadRigBtn=document.getElementById('reloadRig');
+const fitBtn=document.getElementById('fit');
+const statusEl=document.getElementById('status');
+const warnEl=document.getElementById('warnings');
 
-function setStatus(t, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + t; }
-function warn(msg){ warnEl.textContent = msg || ''; }
-function toRad(d){ return d * Math.PI / 180; }
+let images={}, baseRig={}, workRig={}, playing=true, t0=performance.now();
+let globalScale=1;
 
-/* -------- Default layout if no rig yet -------- */
-function defaultLayout(){
-  const c = { x: 0, y: 0 }; // root (torso) will be placed at canvas center via centerOffset
+function setStatus(t,cls='muted'){statusEl.className=cls;statusEl.textContent='Status: '+t;}
+function warn(msg){warnEl.textContent=msg||'';}
+function toRad(d){return d*Math.PI/180;}
+function defaultRig(){
   return {
-    torso:{ pos:c, rot:0, scale:1, pivot:{x:0,y:0} },
-    head:{ pos:{x:0,y:-180}, rot:0, scale:1, pivot:{x:0,y:0} },
-    leftarm:{ pos:{x:-160,y:-40}, rot:0, scale:1, pivot:{x:40,y:40} },
-    rightarm:{ pos:{x:160,y:-40}, rot:0, scale:1, pivot:{x:-40,y:40} },
-    shorts:{ pos:{x:0,y:140}, rot:0, scale:1, pivot:{x:0,y:0} },
-    leftleg:{ pos:{x:-60,y:220}, rot:0, scale:1, pivot:{x:20,y:20} },
-    rightleg:{ pos:{x:60,y:220}, rot:0, scale:1, pivot:{x:-20,y:20} }
+    torso:{pos:{x:0,y:0},rot:0,scale:1,pivot:{x:0,y:0}},
+    head:{pos:{x:0,y:-180},rot:0,scale:1,pivot:{x:0,y:0}},
+    leftUpperArm:{pos:{x:-160,y:-40},rot:0,scale:1,pivot:{x:40,y:40}},
+    leftLowerArm:{pos:{x:120,y:0},rot:0,scale:1,pivot:{x:0,y:0}},
+    rightUpperArm:{pos:{x:160,y:-40},rot:0,scale:1,pivot:{x:-40,y:40}},
+    rightLowerArm:{pos:{x:-120,y:0},rot:0,scale:1,pivot:{x:0,y:0}},
+    shorts:{pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}},
+    leftUpperLeg:{pos:{x:-60,y:220},rot:0,scale:1,pivot:{x:0,y:0}},
+    leftLowerLeg:{pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}},
+    rightUpperLeg:{pos:{x:60,y:220},rot:0,scale:1,pivot:{x:0,y:0}},
+    rightLowerLeg:{pos:{x:0,y:140},rot:0,scale:1,pivot:{x:0,y:0}}
   };
 }
+function copyRig(src,dst){for(const p of PARTS){if(!dst[p])dst[p]={pos:{x:0,y:0},rot:0,scale:1,pivot:{x:0,y:0}};
+  const R=src[p];dst[p].pos={x:R.pos.x,y:R.pos.y};dst[p].rot=R.rot||0;dst[p].scale=R.scale||1;dst[p].pivot={x:R.pivot.x,y:R.pivot.y};}}
 
-/* -------- Load art -------- */
 function loadArt(cb){
-  let missing = [];
-  let done = 0, total = PARTS.length;
-  let store = {};
-  try { store = JSON.parse(localStorage.getItem(STORE_ART) || '{}'); } catch {}
-  PARTS.forEach(p=>{
-    const url = store[p];
-    if(!url){ missing.push(p); done++; if(done===total) cb(missing); return; }
-    const img = new Image();
-    img.onload = ()=>{ images[p] = img; done++; if(done===total) cb(missing); };
-    img.onerror = ()=>{ missing.push(p); done++; if(done===total) cb(missing); };
-    img.src = url;
-  });
+  let store={};try{store=JSON.parse(localStorage.getItem(STORE_ART)||'{}');}catch{}
+  const needed={ torso:'torso', head:'head',
+    leftUpperArm:'leftarm', leftLowerArm:'leftarm',
+    rightUpperArm:'rightarm', rightLowerArm:'rightarm',
+    shorts:'shorts',
+    leftUpperLeg:'leftleg', leftLowerLeg:'leftleg',
+    rightUpperLeg:'rightleg', rightLowerLeg:'rightleg' };
+  let missing=[], done=0, total=Object.keys(needed).length;
+  for(const part in needed){
+    const key=needed[part]; const url=store[key];
+    if(!url){ missing.push(key); done++; if(done===total) cb(missing); continue; }
+    const img=new Image(); img.onload=()=>{images[part]=img; done++; if(done===total) cb(missing);};
+    img.onerror=()=>{missing.push(key); done++; if(done===total) cb(missing);};
+    img.src=url;
+  }
 }
 
-/* -------- Load rig -------- */
 function loadRigFromStorage(){
-  let r = null;
-  try { r = JSON.parse(localStorage.getItem(STORE_RIG) || 'null'); } catch {}
-  if(!r){ r = defaultLayout(); setStatus('no saved rig — using defaults','warn'); }
-  baseRig = r;
-  copyRig(baseRig, workRig);
-}
-function copyRig(src, dst){
-  for(const p of PARTS){
-    const R = src[p];
-    if(!dst[p]) dst[p]={pos:{x:0,y:0},rot:0,scale:1,pivot:{x:0,y:0}};
-    dst[p].pos = { x: R.pos.x, y: R.pos.y };
-    dst[p].rot = R.rot || 0;
-    dst[p].scale = R.scale || 1;
-    dst[p].pivot = { x: R.pivot.x, y: R.pivot.y };
-  }
+  let r=null;
+  try{ r=JSON.parse(localStorage.getItem(STORE_RIG)||'null'); }catch{}
+  if(!r){ try{ r=JSON.parse(localStorage.getItem(STORE_RIG_FALLBACK)||'null'); }catch{} }
+  if(!r){ r=defaultRig(); setStatus('no saved v2 rig — using defaults','warn'); }
+  baseRig=r; copyRig(baseRig,workRig);
 }
 
-/* -------- Drawing helpers -------- */
-function drawImageCentered(img, alpha=1){
-  // Fit each art into a reasonable per-part frame
-  const max = 300;
-  const s = Math.min(max/img.width, max/img.height, 1);
-  const w = img.width * s, h = img.height * s;
-  const x = -w/2, y = -h/2;
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(img, x, y, w, h);
-  ctx.globalAlpha = 1;
+function drawImageCentered(img){
+  const max=300, s=Math.min(max/img.width,max/img.height,1);
+  const w=img.width*s, h=img.height*s, x=-w/2, y=-h/2;
+  ctx.drawImage(img,x,y,w,h);
 }
 
-function applyTransformStack(part, fn){
-  // Build ancestry from root to this part
-  const stack = [];
-  let cur = part;
-  while(cur){
-    stack.push(cur);
-    cur = PARENT[cur];
-  }
-  // Apply global transform (center + globalScale) first
+function applyStack(part, fn){
+  const stack=[]; let cur=part; while(cur){ stack.push(cur); cur=PARENT[cur]; }
   ctx.save();
-  ctx.translate(centerOffset.x, centerOffset.y);
-  ctx.scale(globalScale, globalScale);
-
-  // Apply each node's transform root-first
-  for(let i=stack.length-1; i>=0; i--){
-    const id = stack[i];
-    const R = workRig[id];
+  // global scale applied after centering (centering is done by pre-translate below)
+  for(let i=stack.length-1;i>=0;i--){
+    const id=stack[i], R=workRig[id];
     ctx.translate(R.pos.x, R.pos.y);
     ctx.translate(R.pivot.x, R.pivot.y);
     ctx.rotate(toRad(R.rot||0));
@@ -195,109 +164,106 @@ function applyTransformStack(part, fn){
   ctx.restore();
 }
 
-function renderFrame(){
-  ctx.clearRect(0,0,cvs.width,cvs.height);
-  const order = ['torso','shorts','leftleg','rightleg','leftarm','rightarm','head']; // simple z-order
+/* compute axis-aligned bbox by sampling key points for each image */
+function computeBounds(){
+  const pts=[];
+  const order=['torso','shorts','leftUpperLeg','leftLowerLeg','rightUpperLeg','rightLowerLeg','leftUpperArm','leftLowerArm','rightUpperArm','rightLowerArm','head'];
+  ctx.save();
   for(const p of order){
-    const img = images[p];
-    if(!img) continue;
-    applyTransformStack(p, ()=> drawImageCentered(img, 1));
+    const img=images[p]; if(!img) continue;
+    // same sizing as draw:
+    const max=300, s=Math.min(max/img.width,max/img.height,1);
+    const w=img.width*s, h=img.height*s;
+    // four corners of the image around local origin (centered)
+    const corners=[[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]];
+    // transform each corner by the stack to world space
+    const stack=[]; let cur=p; while(cur){ stack.push(cur); cur=PARENT[cur]; }
+    // Apply transforms
+    for(const [cx,cy] of corners){
+      let x=cx,y=cy;
+      for(let i=stack.length-1;i>=0;i--){
+        const id=stack[i], R=workRig[id], rad=toRad(R.rot||0), sR=Math.sin(rad), cR=Math.cos(rad);
+        // move to pivot
+        x-=R.pivot.x; y-=R.pivot.y;
+        // scale
+        x*=R.scale||1; y*=R.scale||1;
+        // rotate
+        const xr=x*cR - y*sR; const yr=x*sR + y*cR; x=xr; y=yr;
+        // move back from pivot
+        x+=R.pivot.x; y+=R.pivot.y;
+        // translate
+        x+=R.pos.x; y+=R.pos.y;
+      }
+      pts.push([x,y]);
+    }
   }
+  ctx.restore();
+  if(!pts.length) return {minX:0,maxX:0,minY:0,maxY:0};
+  let minX=pts[0][0],maxX=pts[0][0],minY=pts[0][1],maxY=pts[0][1];
+  for(const [x,y] of pts){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+  return {minX,maxX,minY,maxY};
 }
 
-/* -------- Animations (additive on top of workRig from baseRig each frame) -------- */
-function resetWorkPose(){
-  copyRig(baseRig, workRig);
+function renderFrame(){
+  // auto-center: compute bbox in rig space, then translate so its center hits canvas center
+  const bbox=computeBounds();
+  const cx=(bbox.minX+bbox.maxX)/2, cy=(bbox.minY+bbox.maxY)/2;
+
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.save();
+  ctx.translate(cvs.width/2, cvs.height/2);
+  ctx.scale(globalScale, globalScale);
+  ctx.translate(-cx, -cy);
+
+  const order=['torso','shorts','leftUpperLeg','leftLowerLeg','rightUpperLeg','rightLowerLeg','leftUpperArm','leftLowerArm','rightUpperArm','rightLowerArm','head'];
+  for(const p of order){
+    const img=images[p]; if(!img) continue;
+    applyStack(p, ()=> drawImageCentered(img));
+  }
+  ctx.restore();
 }
 
-function animateIdle(t){
-  // gentle torso sway + head counter-rotate + arm swing
-  const spd = (+speedEl.value)/100; // 0.5x..2x
-  const s = Math.sin(t*0.0025*spd);
-  const c = Math.cos(t*0.0025*spd);
+function resetWorkPose(){ copyRig(baseRig,workRig); }
+function animateIdle(t){ const spd=(+speedEl.value)/100, s=Math.sin(t*0.0025*spd), c=Math.cos(t*0.0025*spd);
+  workRig.torso.rot+=s*3; workRig.head.rot+=-s*4;
+  workRig.leftUpperArm.rot+=c*5; workRig.rightUpperArm.rot+=-c*5;
+  workRig.leftLowerArm.rot+=c*8; workRig.rightLowerArm.rot+=-c*8;
+  workRig.leftUpperLeg.rot+=s*2; workRig.rightUpperLeg.rot+=-s*2;
+  workRig.leftLowerLeg.rot+=s*3; workRig.rightLowerLeg.rot+=-s*3; }
+function animateArmsUp(t){ const spd=(+speedEl.value)/100, s=(Math.sin(t*0.003*spd)+1)/2, raise=s*80-10;
+  workRig.leftUpperArm.rot+=raise; workRig.rightUpperArm.rot+=-raise;
+  workRig.leftLowerArm.rot+=raise*0.6; workRig.rightLowerArm.rot+=-raise*0.6;
+  workRig.torso.rot+=Math.sin(t*0.003*spd)*2; workRig.head.rot+=-Math.sin(t*0.003*spd)*2; }
+function animatePrep(t){ const spd=(+speedEl.value)/100, s=(Math.sin(t*0.004*spd)+1)/2, bend=s*15;
+  workRig.torso.rot+=-bend;
+  workRig.leftUpperLeg.rot+=bend*1.2; workRig.rightUpperLeg.rot+=bend*1.2;
+  workRig.leftLowerLeg.rot+=bend*1.6; workRig.rightLowerLeg.rot+=bend*1.6;
+  workRig.leftUpperArm.rot+=bend*0.5; workRig.rightUpperArm.rot+=-bend*0.5; }
 
-  workRig.torso.rot += s * 3;            // ±3°
-  workRig.head.rot  += -s * 4;           // counter sway
-  workRig.leftarm.rot  += c * 5;         // ±5°
-  workRig.rightarm.rot += -c * 5;
-  workRig.leftleg.rot  += s * 2;         // tiny knee drift
-  workRig.rightleg.rot += -s * 2;
-}
+function applyAnimation(t){ const m=animEl.value;
+  if(m==='idle')animateIdle(t); else if(m==='armsup')animateArmsUp(t); else if(m==='prep')animatePrep(t); }
 
-function animateArmsUp(t){
-  const spd = (+speedEl.value)/100;
-  const s = (Math.sin(t*0.003*spd)+1)/2;   // 0..1
-  const raise = s*80 - 10;                 // -10..70°
-  workRig.leftarm.rot  += raise;
-  workRig.rightarm.rot += -raise;
-  // slight counter head & torso
-  workRig.torso.rot += Math.sin(t*0.003*spd)*2;
-  workRig.head.rot  += -Math.sin(t*0.003*spd)*2;
-}
-
-function animatePrep(t){
-  const spd = (+speedEl.value)/100;
-  const s = (Math.sin(t*0.004*spd)+1)/2;   // 0..1
-  const bend = s*15;                       // up to 15°
-  workRig.torso.rot += -bend;
-  workRig.leftleg.rot  += bend*1.2;
-  workRig.rightleg.rot += bend*1.2;
-  workRig.leftarm.rot  += bend*0.5;
-  workRig.rightarm.rot += -bend*0.5;
-  workRig.shorts.pos.y += s*6 - 3;         // small vertical bob
-}
-
-function applyAnimation(t){
-  const mode = animEl.value;
-  if(mode==='idle') animateIdle(t);
-  else if(mode==='armsup') animateArmsUp(t);
-  else if(mode==='prep') animatePrep(t);
-  // 'none' => no offsets
-}
-
-/* -------- Loop -------- */
 function tick(now){
-  if(playing){
-    resetWorkPose();
-    applyAnimation(now - t0);
-    renderFrame();
-  }
+  if(playing){ resetWorkPose(); applyAnimation(now-t0); renderFrame(); }
   requestAnimationFrame(tick);
 }
 
-/* -------- Controls -------- */
-playBtn.addEventListener('click', ()=>{ playing=true; setStatus('playing','ok'); });
-pauseBtn.addEventListener('click', ()=>{ playing=false; setStatus('paused'); renderFrame(); });
-resetPoseBtn.addEventListener('click', ()=>{ resetWorkPose(); renderFrame(); setStatus('pose reset ✓','ok'); });
-reloadRigBtn.addEventListener('click', ()=>{ loadRigFromStorage(); setStatus('rig reloaded ✓','ok'); });
-animEl.addEventListener('change', ()=> setStatus('mode: '+animEl.value));
-speedEl.addEventListener('input', ()=> setStatus('speed: '+(+speedEl.value/100).toFixed(2)+'x'));
+/* controls */
+playBtn.addEventListener('click',()=>{playing=true;setStatus('playing','ok');});
+pauseBtn.addEventListener('click',()=>{playing=false;setStatus('paused');renderFrame();});
+resetPoseBtn.addEventListener('click',()=>{resetWorkPose();renderFrame();setStatus('pose reset ✓','ok');});
+reloadRigBtn.addEventListener('click',()=>{loadRigFromStorage();setStatus('rig reloaded ✓','ok');});
+animEl.addEventListener('change',()=>setStatus('mode: '+animEl.value));
+speedEl.addEventListener('input',()=>setStatus('speed: '+(+speedEl.value/100).toFixed(2)+'x'));
+fitBtn.addEventListener('click',()=>{globalScale=1.0; // crude fit
+  const h=cvs.height*0.75, est=600; globalScale=Math.min(1.5,Math.max(0.6,h/est));
+  renderFrame(); setStatus('fit ✓','ok');});
 
-/* view helpers */
-centerBtn.addEventListener('click', ()=>{ centerOffset={x:cvs.width/2,y:cvs.height/2}; renderFrame(); setStatus('centered ✓','ok'); });
-fitBtn.addEventListener('click', ()=>{
-  // naive fit: scale so torso->legs roughly fills height
-  globalScale = 1.0; // reset
-  const want = cvs.height*0.75;
-  // estimate stack height using rig offsets; this is rough but fine
-  const est = 600;
-  globalScale = Math.min(1.4, Math.max(0.6, want/est));
-  renderFrame(); setStatus('fit view ✓','ok');
-});
-
-/* -------- Boot -------- */
+/* boot */
 (function init(){
-  // load art
   loadArt((missing)=>{
-    if(missing.length){
-      warn('Missing art for: ' + missing.join(', ') + '. Go to Step 4 and save those parts.');
-    } else warn('');
-
-    // load rig
+    if(missing.length) warn('Missing art for: '+[...new Set(missing)].join(', '));
     loadRigFromStorage();
-
-    // start loop
-    t0 = performance.now();
     requestAnimationFrame(tick);
     setStatus('ready');
   });
