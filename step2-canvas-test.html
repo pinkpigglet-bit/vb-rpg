@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 2 — Canvas Touch Test</title>
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0e0f12; color:#e9eef7; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  h1 { margin: 8px 0 12px; font-size: 18px; }
+  .row { display:grid; grid-template-columns: 1.2fr .8fr; gap: 16px; }
+  @media (max-width:900px){ .row{ grid-template-columns: 1fr; } }
+  canvas {
+    width: 100%; height: auto; max-width: 720px;
+    background:#0f1219; border:1px solid rgba(255,255,255,.12); border-radius: 12px;
+    touch-action: none; -ms-touch-action: none; /* critical for finger drawing */
+    display:block;
+  }
+  .panel { background: #151821; border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 12px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  button, input[type="range"], input[type="color"] {
+    appearance:none; background:#1a1f2b; color:#e9eef7; border:1px solid rgba(255,255,255,.12);
+    padding:8px 10px; border-radius:10px;
+  }
+  .muted { color:#9aa3b2; font-size: 14px; }
+  .ok { color:#5eead4; }
+  .warn { color:#fca5a5; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+</head>
+<body>
+<main>
+  <h1>Step 2 — Canvas Touch Test (no images)</h1>
+  <p class="muted">Goal: Draw with your finger. Lines should remain after you lift your finger. If this works, we’ll add guides in Step 3.</p>
+
+  <div class="row">
+    <div class="panel">
+      <canvas id="pad" width="720" height="720" aria-label="Drawing canvas"></canvas>
+      <div class="controls">
+        <label>Brush <input id="brush" type="range" min="1" max="40" value="8"></label>
+        <label>Opacity <input id="opacity" type="range" min="10" max="100" value="100"></label>
+        <label>Color <input id="color" type="color" value="#60a5fa"></label>
+        <button id="undo">Undo</button>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p id="status" class="muted">Status: ready</p>
+      <ul class="muted" style="margin-top:8px">
+        <li>Draw a few squiggles with your finger.</li>
+        <li>Lift your finger — the lines should stay.</li>
+        <li>Try Undo and Clear.</li>
+        <li>Reload the page: the drawing will reset (we’re not saving in Step 2).</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const canvas = new fabric.Canvas('pad', { isDrawingMode: true, backgroundColor: 'transparent' });
+
+  function setStatus(msg, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + msg; }
+
+  // Brush controls
+  const brushEl = document.getElementById('brush');
+  const opacityEl = document.getElementById('opacity');
+  const colorEl = document.getElementById('color');
+
+  function applyBrush(){
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush.width = +brushEl.value;
+    canvas.freeDrawingBrush.color = colorEl.value;
+    canvas.freeDrawingBrush.opacity = (+opacityEl.value) / 100;
+  }
+  brushEl.addEventListener('input', applyBrush);
+  opacityEl.addEventListener('input', applyBrush);
+  colorEl.addEventListener('input', applyBrush);
+
+  // Basic actions
+  document.getElementById('undo').addEventListener('click', ()=>{
+    const objs = canvas.getObjects();
+    if (!objs.length) return;
+    canvas.remove(objs[objs.length-1]); canvas.requestRenderAll();
+  });
+  document.getElementById('clear').addEventListener('click', ()=>{
+    canvas.clear(); canvas.setBackgroundColor('transparent', canvas.renderAll.bind(canvas)); applyBrush();
+  });
+
+  // Feedback on stroke creation
+  canvas.on('path:created', ()=> setStatus('stroke committed ✓', 'ok'));
+  canvas.on('mouse:down', ()=> setStatus('drawing…'));
+  canvas.on('mouse:up', ()=> setStatus('finger lifted; stroke should persist ✓', 'ok'));
+
+  // iOS/Android quirks: ensure drawing stays on
+  canvas.on('touch:gesture', ()=> { canvas.isDrawingMode = true; });
+
+  // Init
+  applyBrush();
+  setStatus('ready — try drawing');
+  console.log('Step 2 canvas ready. If strokes do not persist, check touch-action CSS and device browser.');
+
+</script>
+</body>
+</html>
