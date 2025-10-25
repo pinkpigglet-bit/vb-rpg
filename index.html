@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Volleyball RPG</title>
+  <style>
+    :root {
+      --bg: #0e0f12;
+      --card: #151821;
+      --muted: #9aa3b2;
+      --text: #e9eef7;
+      --accent: #5eead4;
+      --accent-2: #60a5fa;
+      --ring: rgba(94, 234, 212, 0.5);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 50% -10%, #121521, var(--bg));
+      color: var(--text);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+    }
+
+    /* Top bar */
+    header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: linear-gradient(to bottom, rgba(21,24,33,0.9), rgba(21,24,33,0.6));
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 20;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .brand .logo {
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      color: #0b1020;
+      font-weight: 900;
+    }
+
+    /* Menu */
+    .menu-wrap { position: relative; }
+    .menu-btn {
+      appearance: none; border: 0; background: transparent; color: var(--text);
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 40px; height: 40px; border-radius: 10px;
+      transition: 0.2s ease;
+    }
+    .menu-btn:hover { background: rgba(255,255,255,0.06); }
+    .menu-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .dropdown {
+      position: absolute; right: 0; top: 48px; min-width: 200px;
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      display: none;
+    }
+    .dropdown.open { display: block; }
+    .dropdown a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; color: var(--text);
+      text-decoration: none; transition: 0.15s ease;
+    }
+    .dropdown a:hover { background: rgba(255,255,255,0.06); }
+
+    /* Main content */
+    main {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 18px;
+    }
+
+    .hero-card {
+      background: linear-gradient(145deg, rgba(21,24,33,0.9), rgba(21,24,33,0.65));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .character {
+      display: grid;
+      place-items: center;
+      padding: 20px 0 8px;
+    }
+    .avatar {
+      width: clamp(140px, 24vw, 220px);
+      aspect-ratio: 1 / 1;
+      border-radius: 22px;
+      background: radial-gradient(220px 160px at 50% 30%, rgba(96,165,250,0.25), rgba(94,234,212,0.15)),
+                  linear-gradient(180deg, #141722, #0f1219);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: grid; place-items: center;
+      position: relative;
+      box-shadow: var(--shadow);
+    }
+    .avatar::after {
+      content: "";
+      position: absolute; inset: 6px;
+      border-radius: 18px;
+      border: 1px dashed rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+    .avatar svg { width: 60%; height: auto; opacity: 0.95; }
+
+    .avatar-caption {
+      margin-top: 10px; text-align: center; color: var(--muted); font-size: 0.95rem;
+    }
+
+    /* Calendar */
+    .calendar-card {
+      background: linear-gradient(145deg, rgba(21,24,33,0.9), rgba(21,24,33,0.65));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .cal-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 8px; }
+    .cal-title { font-weight: 700; letter-spacing: 0.3px; }
+    .cal-sub { color: var(--muted); font-size: 0.95rem; }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .day {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      background: #121521;
+      padding: 10px;
+      min-height: 90px;
+      display: grid; align-content: start; gap: 6px;
+    }
+    .day .dow { font-size: 0.8rem; color: var(--muted); }
+    .day .date { font-weight: 700; }
+    .day.today { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+    .legend { margin-top: 10px; display: flex; gap: 12px; color: var(--muted); font-size: 0.85rem; }
+
+    /* Footer */
+    footer { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 16px; opacity: 0.9; }
+
+    /* Small screens */
+    @media (max-width: 720px) {
+      .calendar-grid { gap: 6px; }
+      .day { min-height: 70px; padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">VB</div>
+      <div>Volleyball RPG</div>
+    </div>
+    <div class="menu-wrap">
+      <button class="menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="5" r="2" fill="currentColor"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor"/>
+          <circle cx="12" cy="19" r="2" fill="currentColor"/>
+        </svg>
+      </button>
+      <nav id="menu" class="dropdown" role="menu" aria-label="Main Menu">
+        <a href="#character" role="menuitem">🧍 Character</a>
+        <a href="#calendar" role="menuitem">🗓️ Calendar</a>
+        <a href="#settings" role="menuitem">⚙️ Settings</a>
+        <a href="#about" role="menuitem">❓ About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-card" id="character">
+      <h2 style="margin:0 0 6px 2px">Your Athlete</h2>
+      <div class="character">
+        <div class="avatar" aria-label="Character model placeholder" title="Character model">
+          <!-- Simple volleyball SVG placeholder -->
+          <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="c"><circle cx="64" cy="64" r="58"/></clipPath>
+            </defs>
+            <circle cx="64" cy="64" r="60" fill="#e2e8f0"/>
+            <g clip-path="url(#c)" stroke="#0f172a" stroke-width="4" fill="none" opacity="0.9">
+              <path d="M-10 64 H 138"/>
+              <path d="M64 -10 V 138"/>
+              <path d="M-10 0 C 32 18, 96 18, 138 0"/>
+              <path d="M-10 128 C 32 110, 96 110, 138 128"/>
+              <path d="M0 -10 C 18 32, 18 96, 0 138"/>
+              <path d="M128 -10 C 110 32, 110 96, 128 138"/>
+            </g>
+          </svg>
+        </div>
+        <div class="avatar-caption">Tap the menu to edit your character (WIP)</div>
+      </div>
+    </section>
+
+    <section class="calendar-card" id="calendar">
+      <div class="cal-header">
+        <div>
+          <div class="cal-title">Next Two Weeks</div>
+          <div class="cal-sub" id="calRange">Loading…</div>
+        </div>
+        <div>
+          <button id="prev" class="menu-btn" title="Previous 2 weeks" aria-label="Previous two weeks">⟨</button>
+          <button id="next" class="menu-btn" title="Next 2 weeks" aria-label="Next two weeks">⟩</button>
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendarGrid" aria-live="polite"></div>
+      <div class="legend"><span>Today is outlined in teal. Add sessions here later.</span></div>
+    </section>
+  </main>
+
+  <footer>
+    © <span id="year"></span> Volleyball RPG • GitHub Pages demo
+  </footer>
+
+  <script>
+    // --- Mobile-friendly dropdown
+    const btn = document.querySelector('.menu-btn');
+    const menu = document.getElementById('menu');
+    btn.addEventListener('click', () => {
+      const open = menu.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && !btn.contains(e.target)) menu.classList.remove('open');
+    });
+
+    // --- Calendar logic (rolling two-week view with prev/next)
+    const grid = document.getElementById('calendarGrid');
+    const rangeEl = document.getElementById('calRange');
+    const MS_DAY = 24*60*60*1000;
+    let anchor = startOfDay(new Date()); // the first day of the current range
+
+    function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+    function fmt(d){ return d.toLocaleDateString(undefined,{ month:'short', day:'numeric'}); }
+    function dow(d){ return d.toLocaleDateString(undefined,{ weekday:'short'}); }
+
+    function renderCalendar(){
+      grid.innerHTML = '';
+      const today = startOfDay(new Date());
+      const start = startOfDay(anchor);
+      const end = new Date(start.getTime() + 13*MS_DAY);
+      rangeEl.textContent = `${fmt(start)} – ${fmt(end)}`;
+
+      for(let i=0;i<14;i++){
+        const d = new Date(start.getTime() + i*MS_DAY);
+        const cell = document.createElement('div');
+        cell.className = 'day' + (d.getTime() === today.getTime() ? ' today' : '');
+        const top = document.createElement('div');
+        top.className = 'dow';
+        top.textContent = dow(d);
+        const date = document.createElement('div');
+        date.className = 'date';
+        date.textContent = d.getDate();
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.style.minHeight = '24px';
+        slot.style.opacity = '0.8';
+        slot.textContent = '';
+        cell.appendChild(top);
+        cell.appendChild(date);
+        cell.appendChild(slot);
+        grid.appendChild(cell);
+      }
+    }
+
+    document.getElementById('prev').addEventListener('click', ()=>{ anchor = new Date(anchor.getTime() - 14*MS_DAY); renderCalendar(); });
+    document.getElementById('next').addEventListener('click', ()=>{ anchor = new Date(anchor.getTime() + 14*MS_DAY); renderCalendar(); });
+
+    // Footer year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Initialize
+    renderCalendar();
+  </script>
+</body>
+</html>
