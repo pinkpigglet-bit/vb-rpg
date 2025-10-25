@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Step 3 — Head Guide (Vanilla Canvas)</title>
+<style>
+  body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  h1{margin:8px 0 12px;font-size:18px}
+  .row{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  @media(max-width:900px){.row{grid-template-columns:1fr}}
+  canvas{
+    display:block;width:100%;max-width:720px;height:auto;
+    background:#0f1219;border:1px solid rgba(255,255,255,.12);border-radius:12px;
+    touch-action:none;-ms-touch-action:none;
+  }
+  .panel{background:#151821;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px}
+  .muted{color:#9aa3b2}
+  button,input[type="range"],input[type="color"],input[type="checkbox"]{
+    appearance:none;background:#1a1f2b;color:#e9eef7;border:1px solid rgba(255,255,255,.12);
+    padding:8px 10px;border-radius:10px;margin-right:8px
+  }
+  label{display:inline-flex;align-items:center;gap:8px}
+  .ok{color:#5eead4}.warn{color:#fca5a5}
+</style>
+</head>
+<body>
+<main>
+  <h1>Step 3 — Head Guide (Vanilla Canvas)</h1>
+  <p class="muted">Goal: the <b>head.png</b> guide appears behind your drawing; the “Show guide” toggle hides/shows it. Finger/mouse lines must persist.</p>
+
+  <div class="row">
+    <div class="panel">
+      <canvas id="c" width="720" height="720"></canvas>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+        <label>Brush <input id="w" type="range" min="1" max="40" value="8"></label>
+        <label>Opacity <input id="o" type="range" min="10" max="100" value="100"></label>
+        <label>Color <input id="col" type="color" value="#60a5fa"></label>
+        <label><input id="show" type="checkbox" checked> Show guide</label>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p id="status" class="muted">Status: loading guide…</p>
+      <p class="muted">Guide path: <code id="path">assets/guides/head.png</code></p>
+      <ul class="muted">
+        <li>If you don’t see the guide, check the path and open the Console (F12) for errors.</li>
+        <li>Draw lines, lift finger — strokes should remain.</li>
+        <li>Toggle “Show guide” on/off.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script>
+const guidePath = 'assets/guides/head.png'; // adjust if needed
+document.getElementById('path').textContent = guidePath;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const showEl = document.getElementById('show');
+const w = document.getElementById('w');
+const o = document.getElementById('o');
+const col = document.getElementById('col');
+const clearBtn = document.getElementById('clear');
+
+let guideImg = null;
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+// Backing store for strokes so we can re-draw over the guide toggle
+const strokes = []; // each stroke = { color, alpha, width, points:[{x,y},...] }
+let currentStroke = null;
+
+function setStatus(t, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + t; }
+
+function hexToRgba(hex, alpha){
+  const v = hex.replace('#','');
+  const r = parseInt(v.substring(0,2),16);
+  const g = parseInt(v.substring(2,4),16);
+  const b = parseInt(v.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function applyBrush(){
+  // no-op here; we use values directly when drawing
+}
+
+function getPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const t = ('touches' in e) ? e.touches[0] : ('changedTouches' in e ? e.changedTouches[0] : e);
+  return {
+    x: (t.clientX - rect.left) * (canvas.width / rect.width),
+    y: (t.clientY - rect.top)  * (canvas.height / rect.height)
+  };
+}
+
+function start(e){
+  e.preventDefault();
+  drawing = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  currentStroke = {
+    color: col.value,
+    alpha: (+o.value)/100,
+    width: +w.value,
+    points: [{x:p.x,y:p.y}]
+  };
+  setStatus('drawing…');
+}
+
+function move(e){
+  if(!drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  currentStroke.points.push({x:p.x,y:p.y});
+  drawAll(); // re-render immediately for smoothness
+  lastX = p.x; lastY = p.y;
+}
+
+function end(e){
+  if(!drawing) return;
+  e.preventDefault();
+  drawing = false;
+  strokes.push(currentStroke);
+  currentStroke = null;
+  drawAll();
+  setStatus('finger/mouse lifted; stroke persists ✓','ok');
+}
+
+function drawGuide(){
+  if (!guideImg || !showEl.checked) return;
+  // Fit guide into canvas with margin
+  const max = 640;
+  const sx = max / guideImg.width;
+  const sy = max / guideImg.height;
+  const s = Math.min(sx, sy, 1);
+  const w = guideImg.width * s;
+  const h = guideImg.height * s;
+  const x = (canvas.width - w)/2;
+  const y = (canvas.height - h)/2;
+  ctx.globalAlpha = 0.45;
+  ctx.drawImage(guideImg, x, y, w, h);
+  ctx.globalAlpha = 1;
+}
+
+function drawStroke(st){
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = st.width;
+  ctx.strokeStyle = hexToRgba(st.color, st.alpha);
+  ctx.beginPath();
+  for (let i=0;i<st.points.length;i++){
+    const p = st.points[i];
+    if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
+}
+
+function drawAll(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGuide();
+  for (const s of strokes) drawStroke(s);
+  if (currentStroke) drawStroke(currentStroke);
+}
+
+function clearAll(){
+  strokes.length = 0;
+  currentStroke = null;
+  drawAll();
+  setStatus('cleared');
+}
+
+// Event listeners
+canvas.addEventListener('pointerdown', start, { passive:false });
+canvas.addEventListener('pointermove', move, { passive:false });
+canvas.addEventListener('pointerup', end, { passive:false });
+canvas.addEventListener('pointercancel', end, { passive:false });
+canvas.addEventListener('touchstart', start, { passive:false });
+canvas.addEventListener('touchmove', move, { passive:false });
+canvas.addEventListener('touchend', end, { passive:false });
+
+w.addEventListener('input', applyBrush);
+o.addEventListener('input', applyBrush);
+col.addEventListener('input', applyBrush);
+clearBtn.addEventListener('click', clearAll);
+showEl.addEventListener('change', drawAll);
+
+// Load the head guide
+(function loadGuide(){
+  setStatus('loading guide…');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  // Add a cache-buster in case phone cached old version
+  img.src = guidePath + '?v=' + Date.now().toString().slice(-6);
+  img.onload = () => { guideImg = img; drawAll(); setStatus('guide loaded ✓','ok'); };
+  img.onerror = () => { setStatus('failed to load ' + guidePath,'warn'); console.error('Failed guide path:', guidePath); };
+})();
+
+setStatus('ready');
+</script>
+</body>
+</html>
