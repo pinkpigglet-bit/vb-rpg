@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Step 4 — Multi-Part Creator (Vanilla Canvas)</title>
+<title>Step 4 — Multi-Part Creator (Persist per-part, Save All)</title>
 <style>
   body{margin:0;background:#0e0f12;color:#e9eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
   main{max-width:1000px;margin:0 auto;padding:16px}
@@ -28,10 +28,11 @@
 </head>
 <body>
 <main>
-  <h1>Step 4 — Multi-Part Creator (Vanilla Canvas)</h1>
+  <h1>Step 4 — Multi-Part Creator (Persist per-part, Save All)</h1>
   <p class="muted">
-    Choose a part, draw over the base template, optionally upload your own guide (overrides base), and <b>Save Part</b>.
-    Saved drawings are downloaded as transparent PNG and stored locally in <code>localStorage</code>.
+    Draw each part; switch freely between them — your in-progress strokes are preserved per part.  
+    If a saved PNG exists, it’s loaded as the base to continue; otherwise the base template shows.  
+    <b>Save Part</b> overwrites that single part. <b>Save All</b> overwrites every part to localStorage.
   </p>
 
   <div class="panel" style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
@@ -46,6 +47,7 @@
         <option value="rightleg">Right Leg</option>
       </select>
     </label>
+    <button id="saveAll">Save All</button>
     <span id="status" class="muted">Status: ready</span>
   </div>
 
@@ -60,32 +62,32 @@
         <label><input id="show" type="checkbox" checked> Show guide</label>
         <input id="upload" type="file" accept="image/*">
         <button id="remove">Remove guide</button>
-        <button id="clear">Clear</button>
-        <button id="save">Save Part</button>
+        <button id="clear">Clear (session)</button>
         <button id="reset">Reset Part</button>
-
+        <button id="save">Save Part</button>
       </div>
     </div>
 
     <div class="panel">
-      <p class="muted">Base guide path pattern: <code>assets/guides/&lt;part&gt;.png</code></p>
+      <p class="muted">Base guide path: <code>assets/guides/&lt;part&gt;.png</code></p>
       <ul class="muted">
-        <li>Switch parts with the dropdown — base PNG loads automatically.</li>
-        <li>Upload overrides the base; Remove reverts to base.</li>
-        <li>Draw lines and lift finger/mouse — strokes persist.</li>
-        <li><b>Save Part</b> downloads <code>&lt;part&gt;-part.png</code> and stores it to <code>localStorage</code> under <code>vbgame.characterArt.v1.&lt;part&gt;</code>.</li>
-        <li>If a saved image exists for a part, it loads as a locked layer so you can continue.</li>
+        <li>Switch parts — your current strokes for each part are preserved.</li>
+        <li>Upload overrides base guide for the current part; Remove reverts to base.</li>
+        <li>Clear only clears current-session strokes for this part (saved PNG stays).</li>
+        <li>Reset Part deletes the saved PNG for this part.</li>
+        <li>Save Part overwrites this part’s saved PNG (no guide), then clears session strokes to prevent double-saving.</li>
+        <li>Save All overwrites all parts to localStorage (no downloads).</li>
       </ul>
     </div>
   </div>
 </main>
 
 <script>
-/* ------- Config & constants ------- */
+/* ---------------- Config & constants ---------------- */
 const STORE_KEY = 'vbgame.characterArt.v1';
 const PARTS = ['head','torso','leftarm','rightarm','shorts','leftleg','rightleg'];
 
-/* ------- DOM refs ------- */
+/* ---------------- DOM refs ---------------- */
 const partEl = document.getElementById('part');
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -95,31 +97,36 @@ const showEl = document.getElementById('show');
 const uploadEl = document.getElementById('upload');
 const removeEl = document.getElementById('remove');
 const clearBtn = document.getElementById('clear');
-const saveBtn = document.getElementById('save');
 const resetBtn = document.getElementById('reset');
+const saveBtn = document.getElementById('save');
+const saveAllBtn = document.getElementById('saveAll');
+
 const w = document.getElementById('w');
 const o = document.getElementById('o');
 const col = document.getElementById('col');
 
-
-
-
-/* ------- Guide & layers state ------- */
+/* ---------------- Global state ---------------- */
 let currentPart = partEl.value;
 
-let baseGuideImg = null;     // per-part base image
-let customGuideImg = null;   // per-part uploaded override (not persisted across parts)
+/* Per-part in-memory state so switching tabs preserves work-in-progress */
+const state = {}; // partId -> { strokes:[], customGuideDataUrl:null }
+function ensureState(partId){
+  if (!state[partId]) state[partId] = { strokes: [], customGuideDataUrl: null };
+  return state[partId];
+}
+
+/* Guide & saved layers (current part only) */
+let baseGuideImg = null;     // current part base template
+let customGuideImg = null;   // current part uploaded override (from state.customGuideDataUrl)
 let guideImg = null;         // active guide = custom || base
+let savedArtImg = null;      // current part saved PNG (from localStorage)
 
-let savedArtImg = null;      // previously saved drawing for this part (from localStorage), locked layer
-
-/* Drawing state */
+/* Drawing session (current part only) */
 let drawing = false;
 let lastX = 0, lastY = 0;
-const strokes = [];          // current-session strokes (not persisted until Save)
 let currentStroke = null;
 
-/* ------- Helpers ------- */
+/* ---------------- Helpers ---------------- */
 function setStatus(t, cls='muted'){ statusEl.className = cls; statusEl.textContent = 'Status: ' + t; }
 function cacheBust(url){ return url + (url.includes('?')?'&':'?') + 'v=' + Date.now().toString().slice(-6); }
 
@@ -139,7 +146,6 @@ function getPos(e){
   };
 }
 
-/* ------- Drawing ------- */
 function drawImageCentered(img, alpha=1){
   const max = 640;
   const s = Math.min(max / img.width, max / img.height, 1);
@@ -158,7 +164,6 @@ function drawGuide(){
 }
 function drawSavedArt(){
   if (!savedArtImg) return;
-  // Draw saved art fully (acts like a background layer you can continue over)
   drawImageCentered(savedArtImg, 1);
 }
 function drawStroke(st){
@@ -175,13 +180,13 @@ function drawStroke(st){
 }
 function drawAll(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawGuide();      // backmost
-  drawSavedArt();   // then any previously saved drawing
-  for (const s of strokes) drawStroke(s);
+  drawGuide();      // template
+  drawSavedArt();   // previously saved base for continued work
+  for (const s of ensureState(currentPart).strokes) drawStroke(s); // session strokes for this part
   if (currentStroke) drawStroke(currentStroke);
 }
 
-/* ------- Input events ------- */
+/* ---------------- Input events ---------------- */
 function start(e){
   e.preventDefault();
   drawing = true;
@@ -193,7 +198,7 @@ function start(e){
     width: +w.value,
     points: [{x:p.x,y:p.y}]
   };
-  setStatus('drawing…');
+  setStatus(`drawing ${currentPart}…`);
 }
 function move(e){
   if(!drawing) return;
@@ -207,7 +212,7 @@ function end(e){
   if(!drawing) return;
   e.preventDefault();
   drawing = false;
-  strokes.push(currentStroke);
+  ensureState(currentPart).strokes.push(currentStroke);
   currentStroke = null;
   drawAll();
   setStatus('stroke committed ✓','ok');
@@ -225,44 +230,78 @@ w.addEventListener('input', drawAll);
 o.addEventListener('input', drawAll);
 col.addEventListener('input', drawAll);
 clearBtn.addEventListener('click', ()=>{
-  strokes.length = 0; currentStroke = null; drawAll(); setStatus('cleared');
+  const st = ensureState(currentPart);
+  st.strokes = [];
+  currentStroke = null;
+  drawAll();
+  setStatus(`cleared session strokes for ${currentPart}`);
 });
-showEl.addEventListener('change', drawAll);
 
-/* ------- Save (no guide; includes savedArt + new strokes) ------- */
-function exportPNGWithoutGuide(){
+/* ---------------- Save logic ---------------- */
+function exportPNGWithoutGuide(partId, includeCurrentStroke=true){
   const off = document.createElement('canvas');
   off.width = canvas.width; off.height = canvas.height;
   const oc = off.getContext('2d');
 
-  // 1) draw previously saved art if present
-  if (savedArtImg){
+  // 1) draw savedArt for that part (from localStorage)
+  let savedUrl = null;
+  try {
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    savedUrl = store[partId] || null;
+  } catch {}
+  let savedImg = null;
+  if (savedUrl){
+    savedImg = new Image();
+    savedImg.src = savedUrl;
+  }
+
+  function drawCentered(ctx2, img){
     const max = 640;
-    const s = Math.min(max / savedArtImg.width, max / savedArtImg.height, 1);
-    const w = savedArtImg.width * s;
-    const h = savedArtImg.height * s;
+    const s = Math.min(max / img.width, max / img.height, 1);
+    const w = img.width * s;
+    const h = img.height * s;
     const x = (off.width - w)/2;
     const y = (off.height - h)/2;
-    oc.drawImage(savedArtImg, x, y, w, h);
+    ctx2.drawImage(img, x, y, w, h);
   }
 
-  // 2) draw new strokes
-  function drawStrokeCtx(context, st){
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.lineWidth = st.width;
-    context.strokeStyle = hexToRgba(st.color, st.alpha);
-    context.beginPath();
-    for (let i=0;i<st.points.length;i++){
-      const p = st.points[i];
-      if (i===0) context.moveTo(p.x,p.y); else context.lineTo(p.x,p.y);
+  return new Promise((resolve)=>{
+    const finish = ()=>{
+      // 2) draw session strokes from state (not the canvas globals)
+      const st = state[partId] || { strokes: [] };
+      function drawStrokeCtx(context, s){
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.lineWidth = s.width;
+        context.strokeStyle = hexToRgba(s.color, s.alpha);
+        context.beginPath();
+        for (let i=0;i<s.points.length;i++){
+          const p = s.points[i];
+          if (i===0) context.moveTo(p.x,p.y); else context.lineTo(p.x,p.y);
+        }
+        context.stroke();
+      }
+      for (const s of st.strokes) drawStrokeCtx(oc, s);
+
+      // for the current part, optionally include the live currentStroke
+      if (includeCurrentStroke && partId === currentPart && currentStroke){
+        drawStrokeCtx(oc, currentStroke);
+      }
+
+      resolve(off.toDataURL('image/png'));
+    };
+
+    if (savedImg){
+      savedImg.onload = ()=>{ drawCentered(oc, savedImg); finish(); };
+      savedImg.onerror = ()=> finish();
+      if (savedImg.complete) { // cached
+        try { drawCentered(oc, savedImg); } catch {}
+        finish();
+      }
+    } else {
+      finish();
     }
-    context.stroke();
-  }
-  for (const s of strokes) drawStrokeCtx(oc, s);
-  if (currentStroke) drawStrokeCtx(oc, currentStroke);
-
-  return off.toDataURL('image/png'); // transparent background
+  });
 }
 
 function saveToLocalStorage(partId, dataUrl){
@@ -277,78 +316,99 @@ function saveToLocalStorage(partId, dataUrl){
   }
 }
 
-function download(filename, dataUrl){
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-saveBtn.addEventListener('click', ()=>{
-  const dataUrl = exportPNGWithoutGuide();
+saveBtn.addEventListener('click', async ()=>{
+  const dataUrl = await exportPNGWithoutGuide(currentPart, true);
   const ok = saveToLocalStorage(currentPart, dataUrl);
-  download(`${currentPart}-part.png`, dataUrl);
-  setStatus((ok ? `saved ${currentPart} locally and ` : '') + 'download started ✓','ok');
-  // After saving, refresh the savedArt layer so continued drawing builds on the saved PNG
-  loadSavedArtLayer(currentPart, () => drawAll());
+  // Update savedArtImg for the current part and clear session strokes to avoid double-saving
+  const img = new Image();
+  img.onload = ()=>{
+    savedArtImg = img;
+    ensureState(currentPart).strokes = [];
+    currentStroke = null;
+    drawAll();
+    setStatus((ok ? `saved ${currentPart} ✓` : `save failed for ${currentPart}`), ok ? 'ok' : 'warn');
+  };
+  img.src = dataUrl;
 });
 
-resetBtn.addEventListener('click', () => {
-  try {
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-    delete store[currentPart];
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  } catch(e) {
-    console.warn('localStorage reset failed', e);
+/* Save All: overwrite localStorage for all parts using their current session strokes */
+saveAllBtn.addEventListener('click', async ()=>{
+  setStatus('saving all parts…');
+  const results = [];
+  for (const p of PARTS){
+    const dataUrl = await exportPNGWithoutGuide(p, p===currentPart);
+    const ok = saveToLocalStorage(p, dataUrl);
+    results.push([p, ok]);
+    // Also, if saving the current part, update its savedArtImg and clear its session strokes
+    if (p === currentPart){
+      const img = new Image();
+      img.onload = ()=>{
+        savedArtImg = img;
+        ensureState(p).strokes = [];
+        currentStroke = null;
+        drawAll();
+      };
+      img.src = dataUrl;
+    }
   }
-  savedArtImg = null;      // remove the locked saved layer
-  strokes.length = 0;      // clear current session strokes
-  currentStroke = null;
-  drawAll();
-  setStatus(`cleared saved ${currentPart} drawing ✓`, 'ok');
+  const failed = results.filter(([,ok])=>!ok).map(([p])=>p);
+  if (failed.length){
+    setStatus('saved all with errors in: ' + failed.join(', '), 'warn');
+  } else {
+    setStatus('saved all parts ✓', 'ok');
+  }
 });
 
-/* ------- Guide override ------- */
+/* ---------------- Guide override per part ---------------- */
 uploadEl.addEventListener('change', (e)=>{
   const file = e.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
+    ensureState(currentPart).customGuideDataUrl = reader.result;
     const img = new Image();
-    img.onload = () => {
+    img.onload = ()=>{
       customGuideImg = img;
       guideImg = customGuideImg || baseGuideImg;
       drawAll();
       setStatus('custom guide loaded ✓','ok');
     };
-    img.onerror = () => setStatus('failed to decode uploaded image','warn');
+    img.onerror = ()=> setStatus('failed to decode uploaded image','warn');
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
 });
 
 removeEl.addEventListener('click', ()=>{
+  ensureState(currentPart).customGuideDataUrl = null;
   customGuideImg = null;
   guideImg = baseGuideImg;
   drawAll();
   setStatus('reverted to base guide ✓','ok');
 });
 
-/* ------- Loaders per part ------- */
+/* ---------------- Loaders per part ---------------- */
 function loadBaseGuide(partId, cb){
-  baseGuideImg = null;
-  guideImg = null;
+  baseGuideImg = null; guideImg = null;
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.src = cacheBust(`assets/guides/${partId}.png`);
-  img.onload = () => {
+  img.onload = ()=>{
     baseGuideImg = img;
-    guideImg = customGuideImg || baseGuideImg;
-    cb && cb();
+    // If this part has a custom guide saved in memory, load it
+    const customUrl = ensureState(partId).customGuideDataUrl;
+    if (customUrl){
+      const ci = new Image();
+      ci.onload = ()=>{ customGuideImg = ci; guideImg = customGuideImg || baseGuideImg; cb && cb(); };
+      ci.onerror = ()=>{ customGuideImg = null; guideImg = baseGuideImg; cb && cb(); };
+      ci.src = customUrl;
+    } else {
+      customGuideImg = null;
+      guideImg = baseGuideImg;
+      cb && cb();
+    }
   };
-  img.onerror = () => { setStatus(`failed to load base guide for ${partId}`, 'warn'); cb && cb(); };
+  img.onerror = ()=>{ setStatus(`failed to load base guide for ${partId}`, 'warn'); cb && cb(); };
 }
 
 function loadSavedArtLayer(partId, cb){
@@ -358,37 +418,56 @@ function loadSavedArtLayer(partId, cb){
     const url = store[partId];
     if (!url) { cb && cb(); return; }
     const img = new Image();
-    img.onload = () => { savedArtImg = img; cb && cb(); };
-    img.onerror = () => { setStatus(`could not decode saved ${partId} image`, 'warn'); cb && cb(); };
+    img.onload = ()=>{ savedArtImg = img; cb && cb(); };
+    img.onerror = ()=>{ setStatus(`could not decode saved ${partId} image`, 'warn'); cb && cb(); };
     img.src = url;
-  }catch(e){
+  } catch(e){
     console.warn('localStorage parse error', e);
     cb && cb();
   }
 }
 
-/* ------- Part switch ------- */
-function resetSessionStrokes(){
-  strokes.length = 0;
-  currentStroke = null;
-}
+/* ---------------- Part switching ---------------- */
 function loadPart(partId){
   setStatus(`loading ${partId}…`);
-  currentPart = partId;
-  customGuideImg = null; // per-part custom overrides are not persisted
-  resetSessionStrokes();
+  // 1) stash current part's live currentStroke into its state (so no stroke is lost)
+  if (currentStroke){
+    ensureState(currentPart).strokes.push(currentStroke);
+    currentStroke = null;
+  }
 
-  // Load base, then saved art, then render
+  // 2) switch currentPart
+  currentPart = partId;
+
+  // 3) load base guide (+ custom override) and saved art for the new part
   loadBaseGuide(partId, ()=>{
     loadSavedArtLayer(partId, ()=>{
+      // ready: draw with this part's session strokes
       drawAll();
       setStatus(`${partId} ready ✓`, 'ok');
     });
   });
 }
 
-/* ------- Boot ------- */
 partEl.addEventListener('change', ()=> loadPart(partEl.value));
+
+/* ---------------- Reset Part (delete saved PNG for this part) ---------------- */
+resetBtn.addEventListener('click', ()=>{
+  try{
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    delete store[currentPart];
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch(e){
+    console.warn('localStorage reset failed', e);
+  }
+  savedArtImg = null;
+  ensureState(currentPart).strokes = [];
+  currentStroke = null;
+  drawAll();
+  setStatus(`cleared saved ${currentPart} drawing ✓`, 'ok');
+});
+
+/* ---------------- Boot ---------------- */
 loadPart(currentPart);
 setStatus('ready');
 </script>
